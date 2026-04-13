@@ -1,0 +1,13 @@
+[project]
+name = "lab-spark"
+version = "0.1.0"
+# Driver image pins Python 3.11 to match Bitnami Spark 3.5.1 executors.
+# This deviates from the repo-wide 3.13 convention on purpose — see Dockerfile.jupyter.
+requires-python = ">=3.11"
+dependencies = [
+    "pyspark==3.5.1",
+    "jupyterlab>=4,<5",
+    "ipykernel",
+    "pymongo>=4,<5",
+    "psycopg2-binary>=2.9,<3",
+]

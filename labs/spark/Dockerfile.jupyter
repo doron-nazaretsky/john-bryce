@@ -1,0 +1,56 @@
+# Spark driver image: Jupyter PySpark Notebook (official Jupyter Docker Stacks) + connector JARs.
+#
+# Why this base (and not bitnamilegacy/spark)?
+#   jupyter/pyspark-notebook ships JupyterLab, pyspark, Java, and a sane PATH/user
+#   already wired for running notebooks. The Bitnami Spark image is for running
+#   master/worker processes — reusing it as a driver means fighting its entrypoint
+#   and login-shell PATH handling. Driver and executors do NOT need identical
+#   filesystem layouts; they only need matching Spark/Scala/Python versions.
+#
+# Version matrix (keep in sync with labs/spark/compose.yml):
+#   Spark         3.5.1   (via jupyter/pyspark-notebook:spark-3.5.1; matches cluster)
+#   Scala         2.12    (Spark 3.5 default — matters for connector artifact suffixes)
+#   Python        3.11    (shipped by this image tag; must match cluster executors)
+#   Postgres JDBC 42.7.3  (works against Postgres 15/16)
+#   Mongo Spark   10.4.1  (artifact: mongo-spark-connector_2.12 — supports Spark 3.3–3.5
+#                          and MongoDB server 6+. 10.4.x requires mongodb-driver-sync 5.1.x,
+#                          which matches the driver JARs baked below. Do NOT downgrade to
+#                          10.3.x — it requires driver 4.8.x and will NoSuchMethodError
+#                          against these 5.1.x jars.)
+#
+# JARs are baked into the image so notebooks don't need spark.jars.packages (no Ivy
+# resolution at SparkSession start, faster + offline-friendly classroom).
+
+FROM quay.io/jupyter/pyspark-notebook:spark-3.5.1
+
+USER root
+
+RUN pip install --no-cache-dir \
+        pymongo==4.* \
+        psycopg2-binary==2.9.* \
+        jupytext==1.16.*
+
+# Connector JARs — drop into the Spark install's jars dir so they're on the driver classpath.
+# jupyter/pyspark-notebook installs Spark under /usr/local/spark.
+RUN set -eux; \
+    JARS=/usr/local/spark/jars; \
+    curl -fsSL -o "$JARS/postgresql-42.7.3.jar" \
+        https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar && \
+    curl -fsSL -o "$JARS/mongo-spark-connector_2.12-10.4.1.jar" \
+        https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.12/10.4.1/mongo-spark-connector_2.12-10.4.1.jar && \
+    curl -fsSL -o "$JARS/mongodb-driver-sync-5.1.4.jar" \
+        https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/5.1.4/mongodb-driver-sync-5.1.4.jar && \
+    curl -fsSL -o "$JARS/mongodb-driver-core-5.1.4.jar" \
+        https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/5.1.4/mongodb-driver-core-5.1.4.jar && \
+    curl -fsSL -o "$JARS/bson-5.1.4.jar" \
+        https://repo1.maven.org/maven2/org/mongodb/bson/5.1.4/bson-5.1.4.jar && \
+    chown -R ${NB_UID}:${NB_GID} "$JARS"
+
+# Cluster-wide SparkSession defaults (master URL, executor sizing, shuffle partitions).
+# Keeping this in the image means notebooks only set .appName() — infra stays out of
+# lesson code and students can't accidentally misconfigure memory into OOM-kills.
+COPY spark-defaults.conf /usr/local/spark/conf/spark-defaults.conf
+
+USER ${NB_UID}
+
+EXPOSE 8888 4040

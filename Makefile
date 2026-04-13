@@ -15,6 +15,7 @@
 .PHONY: docs lab-preflight lab-orm lab-sql lab-nosql lab-replica-set lab-sharded lab-distributed lab-web \
         lab-redis lab-redis-sentinel lab-redis-cluster \
         lab-neo4j lab-neo4j-cluster \
+        lab-spark lab-spark-down data-spark \
         down reset shell convert \
         replica-set-init sharded-init sql-restore redis-cluster-init neo4j-cluster-init \
         help
@@ -38,8 +39,11 @@ help:
 	@echo "  make lab-redis-cluster    Start workspace + 6-node Redis Cluster (KV lesson 05)"
 	@echo "  make lab-neo4j            Start workspace + single Neo4j (Graph lessons 01-06)"
 	@echo "  make lab-neo4j-cluster    Start workspace + 3-node Neo4j causal cluster (Graph lesson 07)"
+	@echo "  make lab-spark            Start workspace + Spark standalone cluster + Postgres + Mongo"
+	@echo "  make data-spark           Download NYC TLC parquet + build tiered slices (run once)"
 	@echo ""
-	@echo "  make down                 Stop the running lab"
+	@echo "  make down                 Stop the running lab (for non-spark labs)"
+	@echo "  make lab-spark-down       Stop the spark lab (bypasses base compose merge)"
 	@echo "  make reset                Stop + remove all containers and volumes"
 	@echo "  make shell                Open bash in the workspace container"
 	@echo ""
@@ -132,6 +136,22 @@ lab-neo4j-cluster: lab-preflight
 	docker compose $(BASE) -f labs/neo4j-cluster/compose.yml up -d --build --remove-orphans
 	$(MAKE) neo4j-cluster-init
 	@echo "MyST docs: http://localhost:3000"
+
+lab-spark: lab-preflight lab-spark-down
+	docker compose -f labs/spark/compose.yml up -d --build --remove-orphans
+	bash labs/spark/init.sh
+	@echo "Jupyter (Spark driver): http://localhost:8888"
+	@echo "Spark Driver UI:        http://localhost:4040"
+	@echo "Spark Master UI:        http://localhost:8080"
+
+data-spark:
+	bash labs/spark/data-init.sh
+
+# Dedicated down for lab-spark: the spark stack is brought up WITHOUT the base merge,
+# so the generic `make down` (which always prepends $(BASE)) doesn't match its config
+# and leaves spark containers running. Invoke compose with the same -f as lab-spark.
+lab-spark-down:
+	docker compose -f labs/spark/compose.yml down --remove-orphans
 
 # ─── Common operations ──────────────────────────────────────────────────────
 

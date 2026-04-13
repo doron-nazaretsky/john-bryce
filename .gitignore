@@ -81,6 +81,12 @@ target/
 # MyST build output
 _build/
 
+# Spark lab data: ignore everything under labs/spark/data/ except the placeholder
+# files that keep the directory present in a fresh clone.
+labs/spark/data/*
+!labs/spark/data/.gitkeep
+!labs/spark/data/CHECKSUMS.txt
+
 # Project lesson solutions and instructor notes (not committed until after class)
 materials/project/*/solution/
 materials/project/INSTRUCTOR-NOTES.md
