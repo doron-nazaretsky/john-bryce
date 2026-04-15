@@ -15,7 +15,8 @@
 .PHONY: docs lab-preflight lab-orm lab-sql lab-nosql lab-replica-set lab-sharded lab-distributed lab-web \
         lab-redis lab-redis-sentinel lab-redis-cluster \
         lab-neo4j lab-neo4j-cluster \
-        lab-spark lab-spark-down data-spark \
+        lab-spark lab-spark-down data-spark test-spark \
+        spark-producer-start spark-producer-stop spark-producer-status spark-producer-reset \
         down reset shell convert \
         replica-set-init sharded-init sql-restore redis-cluster-init neo4j-cluster-init \
         help
@@ -39,8 +40,13 @@ help:
 	@echo "  make lab-redis-cluster    Start workspace + 6-node Redis Cluster (KV lesson 05)"
 	@echo "  make lab-neo4j            Start workspace + single Neo4j (Graph lessons 01-06)"
 	@echo "  make lab-neo4j-cluster    Start workspace + 3-node Neo4j causal cluster (Graph lesson 07)"
-	@echo "  make lab-spark            Start workspace + Spark standalone cluster + Postgres + Mongo"
-	@echo "  make data-spark           Download NYC TLC parquet + build tiered slices (run once)"
+	@echo "  make lab-spark            Start workspace + Spark standalone cluster + Postgres + Redis + producer"
+	@echo "  make data-spark           Re-run the in-container data bootstrap (idempotent; lab-spark runs it already)"
+	@echo "  make test-spark           Run the stage pytest suite inside spark-jupyter"
+	@echo "  make spark-producer-start   Start the file-drop producer inside spark-jupyter"
+	@echo "  make spark-producer-stop    Stop the running producer"
+	@echo "  make spark-producer-status  Show producer + bucket state"
+	@echo "  make spark-producer-reset   Clear landing/in_process/archive/errors buckets"
 	@echo ""
 	@echo "  make down                 Stop the running lab (for non-spark labs)"
 	@echo "  make lab-spark-down       Stop the spark lab (bypasses base compose merge)"
@@ -137,7 +143,7 @@ lab-neo4j-cluster: lab-preflight
 	$(MAKE) neo4j-cluster-init
 	@echo "MyST docs: http://localhost:3000"
 
-lab-spark: lab-preflight lab-spark-down
+lab-spark: lab-spark-down
 	docker compose -f labs/spark/compose.yml up -d --build --remove-orphans
 	bash labs/spark/init.sh
 	@echo "Jupyter (Spark driver): http://localhost:8888"
@@ -145,7 +151,22 @@ lab-spark: lab-preflight lab-spark-down
 	@echo "Spark Master UI:        http://localhost:8080"
 
 data-spark:
-	bash labs/spark/data-init.sh
+	docker exec spark-jupyter python /home/jovyan/work/scripts/init_data.py
+
+test-spark:
+	docker exec spark-jupyter pytest /home/jovyan/work/tests -v
+
+spark-producer-start:
+	docker exec spark-jupyter python /home/jovyan/work/scripts/producer.py start
+
+spark-producer-stop:
+	docker exec spark-jupyter python /home/jovyan/work/scripts/producer.py stop
+
+spark-producer-status:
+	docker exec spark-jupyter python /home/jovyan/work/scripts/producer.py status
+
+spark-producer-reset:
+	docker exec spark-jupyter python /home/jovyan/work/scripts/producer.py reset
 
 # Dedicated down for lab-spark: the spark stack is brought up WITHOUT the base merge,
 # so the generic `make down` (which always prepends $(BASE)) doesn't match its config

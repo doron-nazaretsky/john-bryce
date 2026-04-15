@@ -1,15 +1,18 @@
-# Spark hands-on lab: 6 containers (master, 2 workers, jupyter driver, postgres, mongo).
+# Spark hands-on lab: standalone cluster + driver + analyst DB + serving store + producer.
 #
 # Standalone — does NOT merge labs/base/compose.yml. The Spark lesson is a deliberate
 # departure from the MyST teaching model; students work directly in spark-jupyter.
 #
-# Architecture: Spark Standalone cluster (spark://spark-master:7077). Driver lives in
-# spark-jupyter (its own image with JupyterLab + JDBC/Mongo connector JARs baked in).
-# Workers and driver share the same Bitnami Spark 3.5.1 base for classpath parity.
+# Architecture:
+#   spark-master / spark-worker-1 / spark-worker-2   Spark Standalone cluster
+#   spark-jupyter                                    Driver + notebook + pipeline code
+#   spark-postgres                                   Analyst store (DB `taxi` only; no DDL)
+#   spark-redis                                      Serving store (no keys pre-created)
+#   spark-producer                                   Lean cp loop: drops one day-file into
+#                                                    data/landing/ every 10s from data/days/
 #
-# Sizing: tuned for an 8 GB Windows laptop. Total guaranteed ~4.5 GB.
-#
-# Usage: make lab-spark   (run `make data-spark` once beforehand to download TLC data)
+# Sizing: tuned for an 8 GB laptop. Total guaranteed ~5 GB (jupyter gets 2 GB hard
+# cap so the local Spark bootstrap in scripts/split_days.py has headroom).
 
 services:
   spark-master:
@@ -24,14 +27,11 @@ services:
       - SPARK_SSL_ENABLED=no
       - SPARK_USER=spark
     ports:
-      - "8080:8080"   # Master web UI
-      - "7077:7077"   # Master RPC
+      - "8080:8080"
+      - "7077:7077"
     cpuset: "0"
     mem_limit: 512m
     healthcheck:
-      # bitnami/spark image ships without curl/wget. Master RPC (7077) binds to the
-      # container's external hostname only, so we probe the Master UI (8080) which
-      # is wildcard-bound on 0.0.0.0.
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8080' || exit 1"]
       interval: 10s
       timeout: 5s
@@ -54,10 +54,6 @@ services:
       - SPARK_SSL_ENABLED=no
       - SPARK_USER=spark
     volumes:
-      # Read parquet via file:/ URIs the driver constructs. Named volume (not bind
-      # mount) because bind mounts are slow on Windows Docker Desktop (WSL2 9P) —
-      # students on Win/Mac would see GB-scale parquet reads degrade materially.
-      # Populated once from ./data by init.sh, then stays on the Docker VM disk.
       - spark_data:/home/jovyan/work/data:ro
     cpuset: "1"
     mem_limit: 1g
@@ -98,32 +94,43 @@ services:
     environment:
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
+      - PYTHONUNBUFFERED=1
       - SPARK_MASTER_URL=spark://spark-master:7077
       - PG_URL=jdbc:postgresql://spark-postgres:5432/taxi
+      - PG_HOST=spark-postgres
+      - PG_PORT=5432
+      - PG_DB=taxi
       - PG_USER=spark
       - PG_PASSWORD=spark
-      - MONGO_URI=mongodb://spark-mongo:27017
+      - REDIS_HOST=spark-redis
+      - REDIS_PORT=6379
+      - LANDING_DIR=/home/jovyan/work/data/landing
+      - IN_PROCESS_DIR=/home/jovyan/work/data/in_process
+      - ARCHIVE_DIR=/home/jovyan/work/data/archive
+      - ERRORS_DIR=/home/jovyan/work/data/errors
+      - SANDBOX_DIR=/home/jovyan/work/data/sandbox
     working_dir: /home/jovyan/work
     volumes:
-      # Notebooks + jobs + helpers are tiny, bind-mounted so edits persist to the repo.
       - ./notebooks:/home/jovyan/work/notebooks
       - ./jobs:/home/jovyan/work/jobs
       - ./helpers:/home/jovyan/work/helpers
-      # Data via named volume (see worker comment). RW so init.sh can populate it.
+      - ./pipeline:/home/jovyan/work/pipeline
+      - ./tests:/home/jovyan/work/tests
+      - ./scripts:/home/jovyan/work/scripts
       - spark_data:/home/jovyan/work/data
-    # Disable token + password for classroom convenience (local-only lab).
     command: ["start-notebook.sh", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.allow_origin=*"]
     ports:
-      - "8888:8888"   # JupyterLab
-      - "4040:4040"   # Spark driver UI
+      - "8888:8888"
+      - "4040:4040"
     cpuset: "3"
-    mem_limit: 1500m
+    mem_limit: 2g
+    mem_reservation: 1500m
     depends_on:
       spark-master:
         condition: service_healthy
       spark-postgres:
         condition: service_healthy
-      spark-mongo:
+      spark-redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -148,24 +155,21 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  spark-mongo:
-    image: mongo:7
-    container_name: spark-mongo
-    hostname: spark-mongo
+  spark-redis:
+    image: redis:7-alpine
+    container_name: spark-redis
+    hostname: spark-redis
     ports:
-      - "27017:27017"
-    volumes:
-      - spark_mongo_data:/data/db
-    mem_limit: 512m
+      - "6379:6379"
+    mem_limit: 256m
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 15s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
 volumes:
   spark_pg_data:
-  spark_mongo_data:
   spark_data:

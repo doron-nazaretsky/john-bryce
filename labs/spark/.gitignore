@@ -1,1 +1,7 @@
 DEBUG.md
+class-discussion-points.md
+data/
+notebooks/*.ipynb
+notebooks/.ipynb_checkpoints/
+**/__pycache__/
+.pytest_cache/
