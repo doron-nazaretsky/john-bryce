@@ -91,5 +91,22 @@ This creates a temporary `.py` file in py:percent format. Discard it after use.
 - **Python / Web** — FastAPI, Pydantic, REST APIs
 - **NoSQL** — Types, MongoDB basics, replication, sharding (uses `make lab-nosql`, `lab-replica-set`, `lab-sharded`)
 - **Docker** — Containers, Compose, distributed systems (uses `make lab-distributed`)
-- **Project** — Capstone (ShopFlow e-commerce pipeline, scaffolded separately via `scaffold/`)
+- **Capstone Projects** — Self-contained scaffolds under `scaffolds/` (scaffold with `make new-project`)
+
+## Capstone Projects
+
+Capstone scaffolds live under `scaffolds/<name>/`. Each is self-contained: Docker
+compose stack, student code, tests, stage briefs, and a `.post-init.py` hook.
+Scaffold one into a fresh directory with:
+
+```bash
+make new-project                         # interactive: picks scaffold + target
+make new-project ARGS="--list"           # list available scaffolds
+make new-project ARGS="--scaffold nosql-ecommerce --target ~/code/shopflow"
+```
+
+Available scaffolds:
+
+- `nosql-ecommerce` — four-database (PostgreSQL + MongoDB + Redis + Neo4j) polyglot pipeline
+- `spark-etl` — incremental file-drop ETL on a Spark standalone cluster
 

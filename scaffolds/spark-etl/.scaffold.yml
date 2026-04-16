@@ -1,0 +1,19 @@
+name: spark-etl
+title: Spark Incremental ETL
+description: >
+  Incremental file-drop ETL on a Spark standalone cluster (3 containers) with
+  a Postgres analyst store and a Redis serving store. Students implement
+  migrate(), run_etl(), total_revenue(), and avg_revenue() against a pre-wired
+  Jupyter driver and pytest suite. Built for an 8 GB laptop.
+exclude:
+  - "**/__pycache__/"
+  - ".pytest_cache/"
+  - "data/"
+  - "notebooks/.ipynb_checkpoints/"
+  - "notebooks/*.ipynb"
+post_init: .post-init.py
+next_steps:
+  - "cd {target}"
+  - "make lab-spark            # bring up the cluster (first run pulls images + bootstraps data)"
+  - "open http://localhost:8888  # Jupyter driver"
+  - "make test-spark           # run the pytest stages inside spark-jupyter"

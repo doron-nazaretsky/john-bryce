@@ -81,15 +81,19 @@ target/
 # MyST build output
 _build/
 
-# Spark lab data: ignore everything under labs/spark/data/ except the placeholder
-# files that keep the directory present in a fresh clone.
-labs/spark/data/*
-!labs/spark/data/.gitkeep
-!labs/spark/data/CHECKSUMS.txt
+# Spark scaffold data: ignore everything under scaffolds/spark-etl/data/ except the
+# placeholder files that keep the directory present in a fresh clone.
+scaffolds/spark-etl/data/*
+!scaffolds/spark-etl/data/.gitkeep
+!scaffolds/spark-etl/data/CHECKSUMS.txt
 
-# Project lesson solutions and instructor notes (not committed until after class)
-materials/project/*/solution/
-materials/project/INSTRUCTOR-NOTES.md
+# Instructor-only capstone solutions + scratch docs (never committed).
+materials/projects/*/solutions/
+materials/projects/*/stage-snapshots/
+materials/projects/*/INSTRUCTOR-NOTES.md
+materials/projects/*/DESIGN-NOTES.md
+materials/projects/*/DEBUG.md
+materials/projects/*/class-discussion-points.md
 
 # SQLite database
 *.db

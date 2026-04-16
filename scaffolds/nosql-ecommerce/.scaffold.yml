@@ -1,0 +1,17 @@
+name: nosql-ecommerce
+title: ShopFlow Polyglot Data Pipeline
+description: >
+  Four-database (PostgreSQL, MongoDB, Redis, Neo4j) e-commerce capstone. A
+  pre-wired FastAPI layer returns 501 until students implement the DBAccess
+  class and migrate/seed scripts. Three phases: transactional, cache, graph.
+exclude:
+  - "**/__pycache__/"
+  - ".pytest_cache/"
+  - ".env"
+post_init: .post-init.py
+next_steps:
+  - "cd {target}"
+  - "cp .env.example .env         # adjust credentials if needed"
+  - "docker compose up -d         # postgres, mongo, redis, neo4j"
+  - "uv sync                      # install Python deps"
+  - "open 00-introduction.md      # then stages/01-taking-orders/lesson.md"
