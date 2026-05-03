@@ -1,9 +1,13 @@
 FROM python:3.13-slim
 
-# System deps + Docker CLI
+# System deps + Docker CLI + JRE
 # gnupg/ca-certificates: required to verify and trust the Docker apt repo signing key
 # curl: used to download the Docker GPG key
 # git, build-essential, nodejs, npm: toolchain for MyST and native Python extensions
+# openjdk-21-jre-headless: required by any JVM-backed Python package (pyspark, etc.)
+#                          — used by the streaming lab; harmless overhead (~250MB) elsewhere.
+#                          21 is the current LTS and what Trixie's main repo ships
+#                          (17 was dropped). Spark 4 supports Java 17 / 21.
 #
 # Docker CLI setup (docker-ce-cli only — no daemon, no containerd):
 #   install -m 0755 -d /etc/apt/keyrings   — creates the keyrings dir with correct permissions
@@ -20,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     gnupg \
     ca-certificates \
+    openjdk-21-jre-headless \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor \
         -o /etc/apt/keyrings/docker.gpg \

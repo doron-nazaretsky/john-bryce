@@ -1,0 +1,35 @@
+# Streaming-clickstream driver image: PySpark 4.0 Notebook + spark-sql-kafka JAR + kafka-python.
+#
+# Version matrix (keep in sync with compose.yml):
+#   Spark 4.0.0 / Scala 2.13 / Python 3.13 / Kafka brokers 3.7
+
+FROM quay.io/jupyter/pyspark-notebook:spark-4.0.0
+
+USER root
+
+RUN pip install --no-cache-dir \
+        pyspark==4.0.0 \
+        kafka-python==2.0.* \
+        jupytext==1.16.* \
+        pytest==8.* \
+        pytest-timeout==2.*
+
+# Pre-fetch the spark-sql-kafka connector + transitive deps so the first
+# spark-submit doesn't pay the Ivy resolution cost on every cold cluster.
+# Spark 4 dropped Scala 2.12; the connector coordinate is _2.13.
+RUN set -eux; \
+    JARS=/usr/local/spark/jars; \
+    cd "$JARS"; \
+    BASE=https://repo1.maven.org/maven2; \
+    curl -fsSL -O "$BASE/org/apache/spark/spark-sql-kafka-0-10_2.13/4.0.0/spark-sql-kafka-0-10_2.13-4.0.0.jar"; \
+    curl -fsSL -O "$BASE/org/apache/spark/spark-token-provider-kafka-0-10_2.13/4.0.0/spark-token-provider-kafka-0-10_2.13-4.0.0.jar"; \
+    curl -fsSL -O "$BASE/org/apache/kafka/kafka-clients/3.9.0/kafka-clients-3.9.0.jar"; \
+    curl -fsSL -O "$BASE/org/apache/commons/commons-pool2/2.12.0/commons-pool2-2.12.0.jar"; \
+    chown -R ${NB_UID}:${NB_GID} "$JARS"
+
+COPY bootstrap.sh /usr/local/bin/before-notebook.d/30-bootstrap.sh
+RUN chmod +x /usr/local/bin/before-notebook.d/30-bootstrap.sh
+
+USER ${NB_UID}
+
+EXPOSE 8888 4040

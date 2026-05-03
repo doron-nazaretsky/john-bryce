@@ -57,7 +57,8 @@ The concepts build on each other. If you're reading this fresh, follow this orde
 
 07-application-patterns
   ├── Caching Patterns                  ← needs Hash Tables + I/O Fundamentals
-  └── Pub/Sub and Messaging             ← needs I/O Fundamentals
+  ├── Pub/Sub and Messaging             ← needs I/O Fundamentals
+  └── Sync vs Async I/O                 ← needs nothing; useful background for Pub/Sub
 ```
 
 ---
@@ -132,3 +133,4 @@ The same concepts appear across every data technology. This matrix shows where e
 ### 07 — Application Patterns
 - [Caching Patterns](07-application-patterns/01-caching-patterns.md)
 - [Pub/Sub and Messaging](07-application-patterns/02-pubsub-and-messaging.md)
+- [Synchronous vs Asynchronous I/O](07-application-patterns/03-sync-vs-async-communication.md)

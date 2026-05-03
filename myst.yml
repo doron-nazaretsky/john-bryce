@@ -59,6 +59,7 @@ project:
           children:
             - file: materials/core-concepts/07-application-patterns/01-caching-patterns.md
             - file: materials/core-concepts/07-application-patterns/02-pubsub-and-messaging.md
+            - file: materials/core-concepts/07-application-patterns/03-sync-vs-async-communication.md
 
     - file: materials/git/README.md
       children:
@@ -244,6 +245,33 @@ project:
           children:
             - file: materials/docker/05-exercises/01-containerize-fastapi-app.md
             - file: materials/docker/05-exercises/02-build-a-distributed-system.md
+
+    - file: materials/streaming/README.md
+      children:
+        - title: Introduction
+          children:
+            - file: materials/streaming/01-introduction/01-from-messaging-to-streaming.md
+            - file: materials/streaming/01-introduction/02-where-this-shows-up.md
+        - title: Kafka
+          children:
+            - file: materials/streaming/02-kafka/01-broker-topic-partition-model.md
+            - file: materials/streaming/02-kafka/02-producers-and-consumers.md
+            - file: materials/streaming/02-kafka/03-consumer-groups-and-rebalancing.md
+            - file: materials/streaming/02-kafka/04-delivery-guarantees.md
+            - file: materials/streaming/02-kafka/05-replication-and-isr.md
+            - file: materials/streaming/02-kafka/06-multi-node-deployment.md
+            - file: materials/streaming/02-kafka/07-advanced-features-overview.md
+        - title: Streaming Processing
+          children:
+            - file: materials/streaming/03-streaming/01-realtime-vs-batch.md
+            - file: materials/streaming/03-streaming/02-streaming-mental-model.md
+            - file: materials/streaming/03-streaming/03-structured-streaming-basics.md
+            - file: materials/streaming/03-streaming/04-windowing.md
+            - file: materials/streaming/03-streaming/05-watermarks-and-late-data.md
+            - file: materials/streaming/03-streaming/06-checkpoints-and-fault-tolerance.md
+        - title: Exercises
+          children:
+            - file: materials/streaming/04-exercises/01-streaming-exercises.md
 
 site:
   template: book-theme

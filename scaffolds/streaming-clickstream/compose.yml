@@ -1,0 +1,222 @@
+# Streaming-clickstream scaffold: 3-broker Kafka (KRaft) + Spark + Jupyter driver.
+#
+# Standalone (does NOT merge labs/base/compose.yml). Mirrors labs/streaming/compose.yml
+# but mounts the project's pipeline/, jobs/, scripts/, helpers/, tests/ into the driver
+# so students can edit and re-run without a rebuild.
+#
+# Sizing for an 8 GB laptop: ~4.4 GB guaranteed total.
+
+services:
+  kafka-1:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: kafka-1
+    hostname: kafka-1
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:19092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:9092,EXTERNAL://localhost:19092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - KAFKA_KRAFT_CLUSTER_ID=streaming-clickstream-cluster
+    ports:
+      - "19092:19092"
+    mem_limit: 320m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  kafka-2:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: kafka-2
+    hostname: kafka-2
+    environment:
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:19093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:9092,EXTERNAL://localhost:19093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - KAFKA_KRAFT_CLUSTER_ID=streaming-clickstream-cluster
+    ports:
+      - "19093:19093"
+    mem_limit: 320m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  kafka-3:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: kafka-3
+    hostname: kafka-3
+    environment:
+      - KAFKA_CFG_NODE_ID=3
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:19094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-3:9092,EXTERNAL://localhost:19094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=3
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=2
+      - KAFKA_CFG_NUM_PARTITIONS=6
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=3
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=2
+      - KAFKA_KRAFT_CLUSTER_ID=streaming-clickstream-cluster
+    ports:
+      - "19094:19094"
+    mem_limit: 320m
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  spark-master:
+    image: bitnamilegacy/spark:4.0.0
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8080' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  spark-worker-1:
+    image: bitnamilegacy/spark:4.0.0
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=600m
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    volumes:
+      - streaming_data:/home/jovyan/work/data:ro
+    mem_limit: 700m
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+  spark-worker-2:
+    image: bitnamilegacy/spark:4.0.0
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=600m
+      - SPARK_WORKER_CORES=1
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+    volumes:
+      - streaming_data:/home/jovyan/work/data:ro
+    mem_limit: 700m
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+  streaming-jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    container_name: streaming-jupyter
+    hostname: streaming-jupyter
+    user: root
+    environment:
+      - PYSPARK_PYTHON=python3
+      - PYSPARK_DRIVER_PYTHON=python3
+      - PYTHONUNBUFFERED=1
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+      - PAGEVIEWS_TOPIC=pageviews
+      - DATA_DIR=/home/jovyan/work/data
+      - CHECKPOINT_DIR=/home/jovyan/work/checkpoints
+      - CHOWN_EXTRA=/home/jovyan/work/data,/home/jovyan/work/checkpoints
+      - CHOWN_EXTRA_OPTS=-R
+    working_dir: /home/jovyan/work
+    volumes:
+      - ./pipeline:/home/jovyan/work/pipeline
+      - ./jobs:/home/jovyan/work/jobs
+      - ./scripts:/home/jovyan/work/scripts
+      - ./helpers:/home/jovyan/work/helpers
+      - ./tests:/home/jovyan/work/tests
+      - ./notebooks:/home/jovyan/work/notebooks
+      - streaming_data:/home/jovyan/work/data
+      - streaming_checkpoints:/home/jovyan/work/checkpoints
+    command: ["start-notebook.sh", "--ServerApp.token=", "--ServerApp.password=", "--ServerApp.allow_origin=*"]
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+    mem_limit: 1800m
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8888' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  streaming_data:
+  streaming_checkpoints:

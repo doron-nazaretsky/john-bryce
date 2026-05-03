@@ -15,6 +15,7 @@
 .PHONY: docs lab-preflight lab-orm lab-sql lab-nosql lab-replica-set lab-sharded lab-distributed lab-web \
         lab-redis lab-redis-sentinel lab-redis-cluster \
         lab-neo4j lab-neo4j-cluster \
+        lab-streaming \
         new-project test-scaffolds \
         down reset shell convert \
         replica-set-init sharded-init sql-restore redis-cluster-init neo4j-cluster-init \
@@ -39,6 +40,7 @@ help:
 	@echo "  make lab-redis-cluster    Start workspace + 6-node Redis Cluster (KV lesson 05)"
 	@echo "  make lab-neo4j            Start workspace + single Neo4j (Graph lessons 01-06)"
 	@echo "  make lab-neo4j-cluster    Start workspace + 3-node Neo4j causal cluster (Graph lesson 07)"
+	@echo "  make lab-streaming        Start 3-broker Kafka (KRaft) + Spark cluster (Streaming lessons)"
 	@echo ""
 	@echo "  make new-project          Scaffold a capstone project into a new directory (pass ARGS=... for flags)"
 	@echo "  make test-scaffolds       Verify scaffolds fail correctly, then pass once solutions are overlaid"
@@ -136,6 +138,15 @@ lab-neo4j-cluster: lab-preflight
 	docker compose $(BASE) -f labs/neo4j-cluster/compose.yml up -d --build --remove-orphans
 	$(MAKE) neo4j-cluster-init
 	@echo "MyST docs: http://localhost:3000"
+
+lab-streaming: lab-preflight
+	docker compose $(BASE) -f labs/streaming/compose.yml up -d --build --remove-orphans
+	@echo "MyST docs:                  http://localhost:3000"
+	@echo "JupyterLab (workspace):     http://localhost:8888  (Spark driver runs here)"
+	@echo "Kafka brokers (in-cluster): kafka-1:9092, kafka-2:9092, kafka-3:9092"
+	@echo "Kafka brokers (host):       localhost:19092, localhost:19093, localhost:19094"
+	@echo "Spark Master UI:            http://localhost:8080"
+	@echo "Spark Driver UI:            http://localhost:4040  (while a query is running)"
 
 # ─── Project scaffolds ──────────────────────────────────────────────────────
 

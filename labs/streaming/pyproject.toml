@@ -1,0 +1,12 @@
+[project]
+name = "lab-streaming"
+version = "0.1.0"
+# Spark 4.0 supports Python 3.13 natively, so the workspace gets the full
+# pyspark + kafka-python stack and acts as the Spark driver. No need for a
+# separate streaming-jupyter sidecar.
+requires-python = ">=3.13"
+dependencies = [
+    "pyspark==4.0.0",
+    "kafka-python>=2.0,<3",
+    "pyarrow>=15",
+]
