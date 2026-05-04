@@ -222,4 +222,8 @@ For each pipeline, ask:
 
 ---
 
+> **Hands-on now — Stage 2 Part A.** Switch to `streaming-clickstream/stages/02-spark-ingest/lesson.md` and complete **Part A (Spark `readStream` from Kafka, console sink)**. Come back here once Part A's acceptance test is green.
+
+---
+
 [← Previous: Consumer Groups and Rebalancing](03-consumer-groups-and-rebalancing.md) | [Next: Replication and ISR →](05-replication-and-isr.md)

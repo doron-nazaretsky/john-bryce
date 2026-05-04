@@ -7,9 +7,9 @@ The tools we work with are **Apache Kafka** for the broker layer and **Spark Str
 ## Prerequisites
 
 - The [Spark batch ETL project](../projects/spark-etl/) -- this module explicitly contrasts batch with streaming and assumes you've felt how a scheduler-driven pipeline behaves.
-- [Pub/Sub and Messaging](../core-concepts/07-application-patterns/02-pubsub-and-messaging.md) -- the coupling problem, broker, topologies, delivery guarantees. The streaming module assumes you've read this.
-- [Synchronous vs Asynchronous I/O](../core-concepts/07-application-patterns/03-sync-vs-async-communication.md) -- the code-level cousin of the same idea. Optional but useful background.
 - Python 3.10+, Docker, basic SQL, comfort with Spark DataFrames.
+
+The two core-concepts lessons that underpin this module ([Pub/Sub and Messaging](../core-concepts/07-application-patterns/02-pubsub-and-messaging.md) and [Synchronous vs Asynchronous I/O](../core-concepts/07-application-patterns/03-sync-vs-async-communication.md)) are taught **inside S1** -- no pre-reading required.
 
 ## Core Concepts Reference
 
@@ -40,13 +40,36 @@ This module references concepts from the **[Core Concepts library](../core-conce
 
 ## Session Split
 
-| Session | Focus | Theory | Hands-on |
-|---|---|---|---|
-| **S1 (4h)** | Kafka basics — messaging problem, broker model, consumer groups | 3h | Project Stage 1 (Parts A + B) — producer + consumer |
-| **S2 (4h)** | Delivery guarantees, multi-node, real-time vs batch, Structured Streaming basics | 3h | Project Stage 2 (Parts A + B) — Spark reads Kafka, parquet sink |
-| **S3 (4h)** | Windowing, watermarks, checkpoints | 3h | Project Stage 3 (Parts A + B) — windowed counts + late data |
+Each session follows the same rhythm: **2h theory → 0.5h exercise → 1h theory → 0.5h exercise**. Each theory block ends right where the next hands-on block begins -- no "we'll explain why later" gaps.
 
-Each session follows the same rhythm: **2h theory → 0.5h exercise → 1h theory → 0.5h exercise**.
+### S1 (4h) — Kafka basics: from messaging to a working round-trip
+
+| Block | Content |
+|---|---|
+| **Theory 1 (2h)** | core-concepts: [Sync vs Async I/O](../core-concepts/07-application-patterns/03-sync-vs-async-communication.md) → [Pub/Sub and Messaging](../core-concepts/07-application-patterns/02-pubsub-and-messaging.md) → [01-Intro/From Messaging to Streaming](01-introduction/01-from-messaging-to-streaming.md) → [02-Kafka/Broker, Topic, Partition](02-kafka/01-broker-topic-partition-model.md) → [02-Kafka/Producers and Consumers](02-kafka/02-producers-and-consumers.md) (both sides — they're one chapter; Part A only needs the producer half) |
+| **Hands-on A (0.5h)** | **Stage 1 Part A** — produce JSON pageviews keyed by `user_id` |
+| **Theory 2 (1h)** | [01-Intro/Where This Shows Up](01-introduction/02-where-this-shows-up.md) (patterns recap) → [02-Kafka/Consumer Groups & Rebalancing](02-kafka/03-consumer-groups-and-rebalancing.md) (light treatment — fan-out/load-distribution; no commit semantics yet) |
+| **Hands-on B (0.5h)** | **Stage 1 Part B** — consume with a `group_id`, return N events |
+
+### S2 (4h) — Failure, durability, and Spark on Kafka
+
+| Block | Content |
+|---|---|
+| **Theory 1 (2h)** | [03-Streaming/Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md) → [03-Streaming/Streaming Mental Model](03-streaming/02-streaming-mental-model.md) → [03-Streaming/Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md) → [02-Kafka/Delivery Guarantees](02-kafka/04-delivery-guarantees.md) (now with the "remember Stage 1's auto-commit?" payoff) |
+| **Hands-on A (0.5h)** | **Stage 2 Part A** — Spark `readStream` from Kafka, console sink |
+| **Theory 2 (1h)** | [03-Streaming/Checkpoints & Fault Tolerance](03-streaming/06-checkpoints-and-fault-tolerance.md) → [02-Kafka/Replication & ISR](02-kafka/05-replication-and-isr.md) (framed as "what `acks=all` actually buys you") |
+| **Hands-on B (0.5h)** | **Stage 2 Part B** — parquet sink + checkpoint |
+
+### S3 (4h) — Windowed analytics over time
+
+| Block | Content |
+|---|---|
+| **Theory 1 (2h)** | [02-Kafka/Multi-Node Deployment](02-kafka/06-multi-node-deployment.md) → [02-Kafka/Advanced Features Overview](02-kafka/07-advanced-features-overview.md) → [03-Streaming/Windowing](03-streaming/04-windowing.md) — the two Kafka chapters are intentional buffer / Q&A; windowing is the actual prereq for the hands-on |
+| **Hands-on A (0.5h)** | **Stage 3 Part A** — tumbling windowed count |
+| **Theory 2 (1h)** | [03-Streaming/Watermarks & Late Data](03-streaming/05-watermarks-and-late-data.md) — slack again left as buffer (this is the conceptually hardest material) |
+| **Hands-on B (0.5h)** | **Stage 3 Part B** — window + watermark + late-data handling |
+
+The [04 - Exercises](04-exercises/01-streaming-exercises.md) are optional, intended for after Stage 3.
 
 ## Lab Environment
 

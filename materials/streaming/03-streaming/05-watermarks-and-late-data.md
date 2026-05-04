@@ -223,4 +223,8 @@ query = top.writeStream.outputMode("update").format("console").start()
 
 ---
 
+> **Hands-on now — Stage 3 Part B.** Switch to `streaming-clickstream/stages/03-windowed-counts/lesson.md` and complete **Part B (window + watermark + late-data handling)**. Run `pytest tests/test_stage3.py -v` -- both parts should be green. That closes Session 3 and the project.
+
+---
+
 [← Previous: Windowing](04-windowing.md) | [Next: Checkpoints and Fault Tolerance →](06-checkpoints-and-fault-tolerance.md)

@@ -20,10 +20,13 @@ def send_event(event: dict) -> None:
 
     Behavior:
         * Serialize the event as JSON.
-        * Use ``acks="all"`` (durability) and the bootstrap servers from
+        * Use the bootstrap servers from
           ``pipeline.config.KAFKA_BOOTSTRAP_SERVERS``.
         * Either flush after each send (simple) or rely on a long-lived
           producer + manual flush from callers (faster). Either is fine.
+
+    Durability tuning (``acks="all"``) is deliberately out of scope for
+    this stage — Session 2 returns to it alongside replication.
 
     Raise NotImplementedError until you've implemented the function — the
     test ``test_part_a`` will fail with that marker, which is what the

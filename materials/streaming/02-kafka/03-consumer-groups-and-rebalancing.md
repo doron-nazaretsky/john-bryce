@@ -231,4 +231,8 @@ Need to reprocess history? Spin up a new consumer with a fresh `group_id` and `a
 
 ---
 
+> **Hands-on now — Stage 1 Part B.** Switch to `streaming-clickstream/stages/01-kafka-basics/lesson.md` and complete **Part B (consumer)**. Run `pytest tests/test_stage1.py -v` -- both `test_part_a` and `test_part_b` should be green. That closes Session 1.
+
+---
+
 [← Previous: Producers and Consumers](02-producers-and-consumers.md) | [Next: Delivery Guarantees →](04-delivery-guarantees.md)

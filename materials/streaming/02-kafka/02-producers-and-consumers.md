@@ -203,4 +203,8 @@ Everything else -- compression, batching, fetch sizes, session timeouts -- has r
 
 ---
 
+> **Hands-on now — Stage 1 Part A.** Switch to your scaffolded `streaming-clickstream` project and complete `stages/01-kafka-basics/lesson.md` **Part A (producer)**. Come back here once `pytest tests/test_stage1.py::test_part_a` is green.
+
+---
+
 [← Previous: Broker, Topic, Partition Model](01-broker-topic-partition-model.md) | [Next: Consumer Groups and Rebalancing →](03-consumer-groups-and-rebalancing.md)

@@ -77,8 +77,3 @@ def test_part_b(patch_topic):
     expected_pairs = {(e["page"], e["ts"]) for e in events}
     actual_pairs = {(e["page"], e["ts"]) for e in consumed}
     assert actual_pairs == expected_pairs
-
-    # Re-consuming with the SAME group_id must return zero records — the
-    # previous run's commit advanced the offset past the last message.
-    again = run_consumer(group_id=group_id, max_records=len(events))
-    assert again == [], "manual commit should advance the group's offset"

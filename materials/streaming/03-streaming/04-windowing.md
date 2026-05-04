@@ -233,4 +233,8 @@ We'll fill out exactly what those 2 minutes mean next.
 
 ---
 
+> **Hands-on now — Stage 3 Part A.** Switch to `streaming-clickstream/stages/03-windowed-counts/lesson.md` and complete **Part A (tumbling windowed count)**. Come back here once Part A's acceptance test is green.
+
+---
+
 [← Previous: Structured Streaming Basics](03-structured-streaming-basics.md) | [Next: Watermarks and Late Data →](05-watermarks-and-late-data.md)

@@ -194,4 +194,8 @@ That's the behavior worth seeing once -- it's the difference between "we have a 
 
 ---
 
+> **Hands-on now — Stage 2 Part B.** Switch to `streaming-clickstream/stages/02-spark-ingest/lesson.md` and complete **Part B (parquet sink + checkpoint)**. Run `pytest tests/test_stage2.py -v` -- both parts should be green. That closes Session 2.
+
+---
+
 [← Previous: Delivery Guarantees](04-delivery-guarantees.md) | [Next: Multi-Node Deployment →](06-multi-node-deployment.md)
