@@ -151,17 +151,32 @@ Combined, these mean you rarely run into a Kafka throughput problem you can't so
 
 ## Rack Awareness
 
-Production clusters span multiple racks (or AZs in the cloud). Kafka's **rack-awareness** ensures partition replicas land in different racks:
+### What a "rack" actually is
+
+In a physical data center, a **rack** is literally a metal cabinet holding a stack of servers. The machines in one rack share infrastructure: the same top-of-rack network switch, the same power distribution unit, often the same cooling zone. That shared infrastructure is also a shared **failure domain** — when the switch dies, every machine in the rack drops off the network simultaneously; when the PDU trips, they all power off together. Two servers in *different* racks fail independently for these reasons; two servers in the *same* rack do not.
+
+In the cloud, the equivalent unit is an **Availability Zone** (AZ): a separate building (or group of buildings) on independent power and network, designed so that an outage in one AZ doesn't take down another. AWS's `us-east-1a`, `us-east-1b`, `us-east-1c` are three such AZs in the same region. Kafka treats AZs and physical racks identically — they're both just "failure domains you want to spread replicas across."
+
+### Why Kafka cares
+
+Replication only protects you if the replicas can't all fail at once. If `replication.factor=3` but all three replicas of a partition happen to live on brokers in the same rack, a single switch failure takes out all three — you've paid the cost of replication and gotten none of the benefit. **Rack awareness** is Kafka's way of avoiding that: when assigning replicas to brokers, the controller deliberately spreads them across distinct racks.
 
 ```
 rack=us-east-1a:  kafka-1, kafka-4
 rack=us-east-1b:  kafka-2, kafka-5
 rack=us-east-1c:  kafka-3, kafka-6
+
+Topic: pageviews   partitions=3   replication.factor=3
+  partition 0   replicas=[kafka-1, kafka-2, kafka-3]   (one per rack ✓)
+  partition 1   replicas=[kafka-4, kafka-5, kafka-6]   (one per rack ✓)
+  partition 2   replicas=[kafka-1, kafka-5, kafka-6]   (one per rack ✓)
 ```
 
-With `replication.factor=3` and rack-aware assignment, every partition has one replica per rack. A whole rack going down still leaves an in-sync replica per partition.
+With this layout, an entire rack going dark still leaves an in-sync replica for every partition in the surviving racks, and Kafka can elect a new leader from there. No data loss, brief leader-election pause, traffic continues.
 
-Set `broker.rack=us-east-1a` (etc.) in each broker's config, and Kafka does the rest.
+### Configuring it
+
+Set `broker.rack=<identifier>` in each broker's config — the value can be any string, as long as brokers in the same failure domain share it and brokers in different domains differ. Kafka uses the labels purely as opaque grouping keys when computing replica placement. There's no runtime cost; the only thing it changes is *which* brokers get which replicas at topic-creation and reassignment time.
 
 ---
 

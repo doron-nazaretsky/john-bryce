@@ -162,11 +162,25 @@ admin.close()
 
 ---
 
-## Kafka Transactions: The Second Half
+## Kafka Transactions: Exactly-Once, but Only Kafka-to-Kafka
 
-Idempotent producer fixes the producer side. But what about the consume-process-produce pattern, where a stream processor reads from one topic, computes, writes to another, and updates the offsets? Three operations, all of which need to atomically succeed or fail together for exactly-once across them.
+Idempotent producer fixes the producer→broker side. The harder question is: can a consumer guarantee that each record is *processed* exactly once? The answer Kafka gives is precise and narrow: **yes, but only when the processing step's only side effect is writing back to Kafka.**
 
-Kafka **transactions** wrap exactly that pattern. The producer opens a transaction, writes outputs, commits the input offsets *as part of the transaction*, and commits. Consumers reading the output topic with `isolation.level=read_committed` only see records from committed transactions.
+### The shape Kafka transactions cover
+
+Kafka's exactly-once feature is built for one specific pipeline shape — the **consume-process-produce loop**:
+
+```
+read from input topic → process → write to output topic (+ commit input offsets)
+```
+
+Three things have to happen together for this to be exactly-once:
+
+1. The output records appear in the destination topic.
+2. The input offsets advance, so the same records aren't re-read.
+3. If anything fails, *none* of the above takes effect.
+
+Kafka can pull this off because **all three side effects live inside Kafka itself**. Consumer offsets aren't stored externally — they're written to an internal Kafka topic called `__consumer_offsets`. So the output writes, the offset commit, and the transaction marker are all just records in Kafka logs, and the broker can wrap them in one atomic transaction.
 
 ```python
 # pseudocode — exact API depends on client
@@ -181,21 +195,47 @@ while True:
     producer.commit_transaction()
 ```
 
-Spark Structured Streaming uses this internally when you write to Kafka with `outputMode("append")` and a checkpoint, giving you end-to-end exactly-once **as long as your sink is also transactional or idempotent**.
+Downstream consumers reading the output topic with `isolation.level=read_committed` only see records from transactions that committed. If the processor crashes mid-transaction, the broker aborts it: the output records are filtered out, the offset commit never takes effect, and a new processor instance re-reads the same input and redoes the work. The redo is safe precisely because the previous attempt's output was discarded.
 
-This is a high-level mention -- you won't write transaction code by hand in the project. What matters is: **exactly-once is real in Kafka, but only for Kafka-to-Kafka pipelines and only inside the boundaries of a single producer**.
+Spark Structured Streaming uses this machinery internally when you `writeStream` to Kafka with a checkpoint, which is why Kafka-to-Kafka Spark pipelines can claim end-to-end exactly-once.
 
----
+### Why exactly-once dies the moment you leave Kafka
 
-## What "Exactly-Once" Doesn't Mean
+Now consider the much more common shape — a consumer that reads from Kafka and writes *somewhere else*: Postgres, S3, Elasticsearch, Stripe, an email provider, a Redis counter. Call this **consume-process-commit**:
 
-It does **not** mean:
+```
+read from Kafka → do external side effect → commit Kafka offset
+```
 
-- **Exactly-once across systems.** If your consumer reads from Kafka and writes to Postgres, "exactly-once" requires the Postgres write and the Kafka offset commit to be atomic. They aren't, by default. You need either a transactional outbox pattern, a sink that reads offsets back, or idempotent writes (with dedup keys in Postgres).
-- **Exactly-once across multiple producers.** Idempotence is per-producer. Two producers sending the same business event will produce two records.
-- **Exactly-once observation.** Two independent consumers reading the same topic each see every record. Kafka transactions give exactly-once *processing* in the consume-process-produce loop, not exactly-once *consumption*.
+You now have **two independent systems** that need to agree on what happened: the external sink, and Kafka's offset store. There is no distributed transaction between them — Kafka cannot roll back a Postgres insert, and Postgres cannot roll back a Kafka offset commit. Whichever order you pick, one failure mode is unavoidable:
 
-The correct mental model: aim for **at-least-once delivery + idempotent consumers**. Use exactly-once Kafka transactions only when the whole pipeline lives inside Kafka.
+- **Process, then commit** (at-least-once): the external write succeeds, the consumer crashes before `commit()` lands, the next poll re-delivers the record → **duplicate**.
+- **Commit, then process** (at-most-once): the commit succeeds, processing crashes → **lost record**.
+
+There is no third option Kafka can offer here, because Kafka only controls one of the two systems. This isn't a missing feature waiting to be built — it's a fundamental limit of distributed systems without a shared transaction coordinator. Kafka transactions work for Kafka-to-Kafka because Kafka *is* the shared coordinator. Once a non-Kafka system is in the picture, that's gone.
+
+### What "effectively exactly-once" looks like in practice
+
+Real pipelines don't give up on exactly-once semantics — they just stop expecting Kafka to provide them. They run **at-least-once delivery** and make the *processing step* idempotent, so a duplicate delivery has no observable effect. The common patterns:
+
+1. **Dedup key in the sink.** Write `(event_id, ...)` to Postgres with `event_id` as a unique constraint. A duplicate insert fails harmlessly. The event needs a stable ID — `(topic, partition, offset)` works as a fallback when nothing better exists.
+2. **Natural idempotency.** `UPDATE pages SET last_seen_at = '2026-05-03T10:00Z' WHERE id = 'x'` produces the same final state no matter how many times it runs. Upserts (`INSERT ... ON CONFLICT DO UPDATE`) fall in the same category.
+3. **Transactional outbox.** Inside a single Postgres transaction, do both the business write *and* insert a row recording "I processed offset N for partition P." On startup, the consumer reads its last-processed offset from Postgres and `seek()`s there, ignoring `__consumer_offsets` entirely. Postgres is now the source of truth for "what have I processed," so the two systems can't diverge. This is the canonical fix when you genuinely need exactly-once external writes.
+4. **Sink owns the offsets.** Some sinks (Iceberg/Delta with checkpointing, Spark Structured Streaming with a checkpoint directory) record input offsets atomically alongside the output. Same idea as the outbox, baked into the framework.
+
+### What "exactly-once" does *not* mean
+
+Even within Kafka, the term is narrower than it sounds:
+
+- **Not across systems.** Anything outside Kafka is your problem to make idempotent.
+- **Not across multiple producers.** Idempotence is keyed on Producer ID. Two producers emitting the same business event produce two records — Kafka has no way to know they're "the same."
+- **Not exactly-once *consumption*.** Two consumer groups reading the same topic each see every record. Transactions give exactly-once *processing* inside one consume-process-produce loop, not exactly-once *delivery* to every reader.
+
+### The mental model
+
+Kafka can guarantee that **its own internal state — output topic plus offsets — moves atomically**. The moment your side effect leaves Kafka, that guarantee evaporates, and the responsibility moves to you: either make the side effect idempotent, or make the external system the place where offsets are committed.
+
+That is why the practical recommendation, for everything except pure Kafka-to-Kafka stream processing, is always the same: **at-least-once delivery + idempotent consumers**. Reach for Kafka transactions only when the whole pipeline lives inside Kafka.
 
 ---
 
