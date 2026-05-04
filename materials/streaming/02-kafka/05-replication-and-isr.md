@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Replication and the In-Sync Replica Set
 
 A single broker is a single point of failure. The disk fails, the process crashes, the rack loses power -- and any partition that lived only on that broker is gone. Real Kafka clusters run with replication so partitions survive broker loss without data loss or downtime.
@@ -62,6 +68,36 @@ Why does it matter? Because the ISR is what determines:
 3. **Whether the partition can accept writes at all** (with `min.insync.replicas`).
 
 A follower that falls out of the ISR is not lost -- it's still trying to catch up. But it's not counted toward durability or election eligibility until it's caught up.
+
+Let's create a replicated topic and ask the cluster who the leader, replicas, and ISR are for each partition:
+
+```{code-cell} python
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-replication-isr"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(name=TOPIC, num_partitions=3, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+
+import time; time.sleep(1)   # let metadata propagate
+for t in admin.describe_topics([TOPIC]):
+    print(f"topic: {t['topic']}")
+    for p in t["partitions"]:
+        print(f"  partition {p['partition']}: "
+              f"leader=broker-{p['leader']} "
+              f"replicas={p['replicas']} "
+              f"isr={p['isr']}")
+
+admin.delete_topics([TOPIC])
+admin.close()
+```
+
+In a healthy 3-broker cluster you'll see `replicas` and `isr` matching for every partition — every replica is caught up. Stop a broker and the same call would show that broker missing from the ISR (it would still be in `replicas`).
 
 ---
 

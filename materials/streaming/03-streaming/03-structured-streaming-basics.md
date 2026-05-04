@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Structured Streaming Basics
 
 Spark's streaming API is **Structured Streaming**: the same DataFrame and SQL APIs you already know, applied to an unbounded input. The trick is: the DataFrame represents the *whole infinite stream*, not a fixed snapshot. Spark turns each query into a long-running job that incrementally maintains the result.
@@ -27,23 +33,29 @@ That's the whole API model: **DataFrames over unbounded tables, queries that mai
 
 Spark ships a Kafka source -- the `spark-sql-kafka` connector -- that reads a topic as a streaming DataFrame:
 
-```python
-spark = SparkSession.builder \
-    .appName("pageview-ingest") \
-    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0") \
-    .getOrCreate()
+```{code-cell} python
+from pyspark.sql import SparkSession
 
-stream = spark.readStream \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka-1:9092,kafka-2:9092,kafka-3:9092") \
-    .option("subscribe", "pageviews") \
-    .option("startingOffsets", "earliest") \
-    .load()
+spark = (SparkSession.builder
+    .appName("pageview-ingest")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
+    .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0")
+    .getOrCreate())
+
+stream = (spark.readStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", "kafka-1:9092,kafka-2:9092,kafka-3:9092")
+    .option("subscribe", "pageviews")
+    .option("startingOffsets", "earliest")
+    .load())
+
+stream.printSchema()
 ```
 
 `stream` is a streaming DataFrame. Its schema is fixed: `key`, `value`, `topic`, `partition`, `offset`, `timestamp`, `timestampType`. The `value` column is bytes -- you have to deserialize.
 
-```python
+```{code-cell} python
 from pyspark.sql.functions import col, from_json
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType
 
@@ -56,6 +68,8 @@ schema = StructType([
 events = stream.select(
     from_json(col("value").cast("string"), schema).alias("event")
 ).select("event.*")
+
+events.printSchema()
 ```
 
 Now `events` has columns `user_id`, `page`, `ts`. From here it behaves like any DataFrame -- `select`, `filter`, `groupBy`, joins. The difference is it's unbounded.
@@ -169,6 +183,8 @@ from pyspark.sql.types import StructType, StructField, StringType, TimestampType
 
 spark = (SparkSession.builder
     .appName("pageview-ingest")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
     .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0")
     .getOrCreate())
 

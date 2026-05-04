@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Delivery Guarantees
 
 Every messaging system has to answer one question: **what does it promise about whether your message arrives?** The answer is one of three classic levels -- at-most-once, at-least-once, exactly-once -- and the rest of the system follows from which one you pick.
@@ -108,6 +114,51 @@ Kafka's **idempotent producer** fixes this. With `enable.idempotence=true` (defa
 This guarantees **at-most-once write per producer-partition** at the storage level, which combined with retries gives **exactly-once write**: every record makes it, exactly one copy.
 
 Cost: small CPU and metadata overhead, well worth it. **Turn it on.** It's now the default in Kafka.
+
+Here's a producer wired up for the strong-durability story (`acks=all` + idempotence) plus a manual-commit consumer that processes *then* commits — the at-least-once recipe end to end:
+
+```{code-cell} python
+from kafka import KafkaProducer, KafkaConsumer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-delivery-guarantees"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(name=TOPIC, num_partitions=1, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+
+# Strong-durability producer: every write waits for full ISR ack, idempotent on retries
+producer = KafkaProducer(
+    bootstrap_servers=BOOTSTRAP,
+    acks="all",
+    enable_idempotence=True,
+    retries=5,
+)
+for i in range(5):
+    md = producer.send(TOPIC, key=f"order-{i}".encode(), value=f"amount={i*10}".encode()).get(timeout=10)
+    print(f"acked: partition={md.partition} offset={md.offset}")
+producer.flush()
+producer.close()
+
+# At-least-once consumer: process THEN commit
+consumer = KafkaConsumer(
+    TOPIC, bootstrap_servers=BOOTSTRAP,
+    group_id="demo-delivery-grp",
+    auto_offset_reset="earliest",
+    enable_auto_commit=False,
+    consumer_timeout_ms=8000,
+)
+for r in consumer:
+    print(f"processed key={r.key} value={r.value}")
+    consumer.commit()    # only after successful processing
+consumer.close()
+admin.delete_topics([TOPIC])
+admin.close()
+```
 
 ---
 

@@ -142,11 +142,10 @@ lab-neo4j-cluster: lab-preflight
 lab-streaming: lab-preflight
 	docker compose $(BASE) -f labs/streaming/compose.yml up -d --build --remove-orphans
 	@echo "MyST docs:                  http://localhost:3000"
-	@echo "JupyterLab (workspace):     http://localhost:8888  (Spark driver runs here)"
+	@echo "JupyterLab (workspace):     http://localhost:8888  (Spark runs in-process, local mode)"
 	@echo "Kafka brokers (in-cluster): kafka-1:9092, kafka-2:9092, kafka-3:9092"
 	@echo "Kafka brokers (host):       localhost:19092, localhost:19093, localhost:19094"
-	@echo "Spark Master UI:            http://localhost:8080"
-	@echo "Spark Driver UI:            http://localhost:4040  (while a query is running)"
+	@echo "Spark UI:                   http://localhost:4040  (while a query is running)"
 
 # ─── Project scaffolds ──────────────────────────────────────────────────────
 

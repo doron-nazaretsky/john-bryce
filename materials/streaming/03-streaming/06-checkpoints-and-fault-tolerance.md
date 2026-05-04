@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Checkpoints and Fault Tolerance
 
 A streaming query runs for days, weeks, months. During that time it builds up state -- offsets it has consumed, aggregates it has computed, windows it has open. When the query restarts -- because the cluster was upgraded, the driver crashed, the deploy rolled out -- all that state has to come back. Otherwise the query would either lose work (silently re-emitting) or duplicate work (re-reading from offset 0).
@@ -25,6 +31,48 @@ query = events.writeStream \
 ```
 
 If `checkpointLocation` is missing, Spark refuses to start a stateful query and warns even on stateless ones. **Always set it.**
+
+Here's a tiny streaming query with an explicit checkpoint location. After it runs, we can inspect the checkpoint directory on disk and see Spark's bookkeeping (offsets, commits, metadata) take shape.
+
+```{code-cell} python
+import os, time, shutil, uuid
+from pyspark.sql import SparkSession
+
+spark = (SparkSession.builder
+    .appName("checkpoint-demo")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
+    .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
+
+ckpt = f"/tmp/streaming-ckpt-{uuid.uuid4().hex[:8]}"
+shutil.rmtree(ckpt, ignore_errors=True)
+
+stream = (spark.readStream.format("rate").option("rowsPerSecond", 3).load())
+
+query = (stream.writeStream
+    .format("memory")
+    .queryName("ckpt_demo")
+    .option("checkpointLocation", ckpt)
+    .outputMode("append")
+    .start())
+
+time.sleep(8)
+last = query.lastProgress
+query.stop()
+
+print("batchId committed:", last.get("batchId"))
+print("source offsets:", last["sources"][0].get("endOffset"))
+print(f"\ncheckpoint contents at {ckpt}:")
+for root, dirs, files in os.walk(ckpt):
+    for f in files:
+        rel = os.path.relpath(os.path.join(root, f), ckpt)
+        print(f"  {rel}")
+
+shutil.rmtree(ckpt, ignore_errors=True)
+```
+
+You'll typically see `offsets/`, `commits/`, `sources/`, and `metadata` -- the building blocks Spark uses on restart to resume exactly where it left off.
 
 ---
 

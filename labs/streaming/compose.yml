@@ -1,21 +1,19 @@
-# Streaming lab: 3-broker Kafka cluster (KRaft) + Spark 4.0 standalone cluster.
+# Streaming lab: 3-broker Kafka cluster (KRaft) + workspace running Spark in local mode.
 # Merges with labs/base/compose.yml — the workspace service is layered on top
-# with kafka-python + pyspark from labs/streaming/pyproject.toml. The base
-# image now ships OpenJDK 17, so workspace IS the Spark driver — no
-# separate streaming-jupyter container needed.
+# with kafka-python + pyspark from labs/streaming/pyproject.toml. The base image
+# ships OpenJDK 17, so workspace runs Spark inside its own JVM (local[*] mode) —
+# no separate Spark master/worker containers. The streaming module teaches stream
+# semantics (windows, watermarks, checkpoints), not Spark cluster ops.
 #
 # Architecture:
-#   workspace (from labs/base)         MyST docs (3000) + Jupyter (8888) + Spark driver
+#   workspace (from labs/base)         MyST docs (3000) + Jupyter (8888) + Spark driver/executor (local mode).
 #                                      Python 3.13, JRE 17, pyspark 4.0.0, kafka-python.
-#   kafka-1 / kafka-2 / kafka-3        3-node KRaft cluster (combined broker+controller)
-#   spark-master / spark-worker-{1,2}  Spark 4.0.0 standalone cluster.
+#   kafka-1 / kafka-2 / kafka-3        3-node KRaft cluster (combined broker+controller).
 #
 # Sizing: tuned for 8 GB laptops.
-#   workspace:          (modest, ~500m practical with pyspark loaded)
+#   workspace:          ~3g (Spark local + kernel + MyST node process)
 #   kafka-1/2/3:        320m each   (~960m total)
-#   spark-master:       256m
-#   spark-worker-1/2:   700m each   (~1.4g)
-#   total guaranteed:   ~3.1g + workspace
+#   total guaranteed:   ~4g
 #
 # Usage: make lab-streaming
 
@@ -26,17 +24,15 @@ services:
         LAB: streaming
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
-      - SPARK_MASTER_URL=spark://spark-master:7077
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
+    mem_limit: 3g
     depends_on:
       kafka-1:
         condition: service_healthy
       kafka-2:
         condition: service_healthy
       kafka-3:
-        condition: service_healthy
-      spark-master:
         condition: service_healthy
 
   kafka-1:
@@ -133,64 +129,4 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    restart: unless-stopped
-
-  spark-master:
-    image: bitnamilegacy/spark:4.0.0
-    container_name: spark-master
-    hostname: spark-master
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-      - SPARK_USER=spark
-    ports:
-      - "8080:8080"
-      - "7077:7077"
-    mem_limit: 256m
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/localhost/8080' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 15s
-    restart: unless-stopped
-
-  spark-worker-1:
-    image: bitnamilegacy/spark:4.0.0
-    container_name: spark-worker-1
-    hostname: spark-worker-1
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=600m
-      - SPARK_WORKER_CORES=1
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-      - SPARK_USER=spark
-    mem_limit: 700m
-    depends_on:
-      spark-master:
-        condition: service_healthy
-    restart: unless-stopped
-
-  spark-worker-2:
-    image: bitnamilegacy/spark:4.0.0
-    container_name: spark-worker-2
-    hostname: spark-worker-2
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=600m
-      - SPARK_WORKER_CORES=1
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_SSL_ENABLED=no
-      - SPARK_USER=spark
-    mem_limit: 700m
-    depends_on:
-      spark-master:
-        condition: service_healthy
     restart: unless-stopped

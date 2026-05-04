@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Producers and Consumers
 
 Now that you have the broker/topic/partition model, the next question is how code on either side actually gets records in and out. This chapter walks through the producer and consumer APIs -- what they do, what's happening under the hood, and the few configuration knobs that matter for the rest of this module.
@@ -10,12 +16,28 @@ We'll use `kafka-python` for the examples because that's what the project uses. 
 
 A producer is a long-lived client that appends records to topics. Its job is small: serialize a record, decide which partition it belongs to, batch records together for efficiency, and send them to the right broker.
 
-```python
+```{code-cell} python
 from kafka import KafkaProducer
-import json
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import UnknownTopicOrPartitionError, TopicAlreadyExistsError
+import json, time
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+
+# Reset the topic so this cell is idempotent — run it as many times as you like.
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.delete_topics(["pageviews"]); time.sleep(1)
+except UnknownTopicOrPartitionError:
+    pass
+try:
+    admin.create_topics([NewTopic(name="pageviews", num_partitions=6, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+admin.close()
 
 producer = KafkaProducer(
-    bootstrap_servers="localhost:9092,localhost:9093,localhost:9094",
+    bootstrap_servers=BOOTSTRAP,
     key_serializer=lambda k: k.encode("utf-8"),
     value_serializer=lambda v: json.dumps(v).encode("utf-8"),
 )
@@ -26,6 +48,7 @@ producer.send(
     value={"user_id": "user-42", "page": "/checkout", "ts": "2026-05-03T10:00:00Z"},
 )
 producer.flush()   # block until all in-flight records are acknowledged
+print("sent")
 ```
 
 A few things worth understanding from that snippet:
@@ -67,23 +90,39 @@ Setting `linger.ms=10` means "wait up to 10ms to fill the batch before sending."
 
 A consumer is also a long-lived client. It subscribes to one or more topics and pulls records.
 
-```python
+```{code-cell} python
 from kafka import KafkaConsumer
+from kafka.admin import KafkaAdminClient
+from kafka.errors import GroupIdNotFoundError
 import json
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+GROUP = "analytics-service"
+
+# Reset the consumer group so re-running this cell always reads from the start.
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.delete_consumer_groups([GROUP])
+except GroupIdNotFoundError:
+    pass
+admin.close()
 
 consumer = KafkaConsumer(
     "pageviews",
-    bootstrap_servers="localhost:9092,localhost:9093,localhost:9094",
-    group_id="analytics-service",
+    bootstrap_servers=BOOTSTRAP,
+    group_id=GROUP,
     auto_offset_reset="earliest",   # or "latest"
     enable_auto_commit=False,
     value_deserializer=lambda b: json.loads(b.decode("utf-8")),
     key_deserializer=lambda b: b.decode("utf-8") if b else None,
+    consumer_timeout_ms=8000,       # exit the iterator after 8s of no records (demo only)
 )
 
 for record in consumer:
-    process(record.value)
-    consumer.commit()    # explicitly mark "I'm done with this offset"
+    print(f"partition={record.partition} offset={record.offset} key={record.key} value={record.value}")
+    consumer.commit()               # explicitly mark "I'm done with this offset"
+
+consumer.close()
 ```
 
 What's happening here:

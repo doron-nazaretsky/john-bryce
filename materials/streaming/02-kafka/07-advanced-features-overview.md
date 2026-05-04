@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Advanced Features Overview
 
 Kafka has grown beyond "broker, topic, partition." A handful of features built on the core model show up so often in real systems that you should know they exist, what problem each solves, and roughly how it does it. We won't use most of them in the project, but you'll meet them in production.
@@ -32,6 +38,52 @@ After compaction:
 A quirk: a `null` value is treated as a **tombstone** -- once compacted, it deletes the key. This is how you remove records from a compacted topic.
 
 You enable compaction with `cleanup.policy=compact` on the topic.
+
+We can create a compacted topic and produce two records under the same key — the second one is the "current" value:
+
+```{code-cell} python
+from kafka import KafkaProducer, KafkaConsumer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-compacted-topic"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(
+        name=TOPIC, num_partitions=1, replication_factor=3,
+        topic_configs={"cleanup.policy": "compact", "min.cleanable.dirty.ratio": "0.01"},
+    )])
+except TopicAlreadyExistsError:
+    pass
+
+# Verify the topic is configured for compaction
+from kafka.admin import ConfigResource, ConfigResourceType
+configs = admin.describe_configs([ConfigResource(ConfigResourceType.TOPIC, TOPIC)])
+for cfg in configs:
+    for entry in cfg.resources[0][4]:
+        if entry[0] == "cleanup.policy":
+            print(f"cleanup.policy = {entry[1]}")
+
+# Produce two values under the same key (only the last one survives compaction)
+producer = KafkaProducer(bootstrap_servers=BOOTSTRAP)
+producer.send(TOPIC, key=b"user-42", value=b'{"name":"Alice"}')
+producer.send(TOPIC, key=b"user-42", value=b'{"name":"Alicia M."}')
+producer.flush()
+producer.close()
+
+# Read back both records (compaction is asynchronous; for a brand-new topic both will still be there)
+consumer = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP,
+                         auto_offset_reset="earliest",
+                         consumer_timeout_ms=2000, group_id=None)
+for r in consumer:
+    print(f"offset={r.offset} key={r.key} value={r.value}")
+consumer.close()
+
+admin.delete_topics([TOPIC])
+admin.close()
+```
 
 ---
 

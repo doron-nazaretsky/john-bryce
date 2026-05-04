@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Consumer Groups and Rebalancing
 
 Partitions split a topic so that many machines can write and read in parallel. **Consumer groups** are how readers cooperate to share that work -- and how Kafka offers both pub/sub fan-out and queue-style point-to-point delivery using the same primitive.
@@ -45,6 +51,59 @@ Two distinct properties from one diagram:
 2. **Across `analytics` and `notifications`**, both groups see all records independently. `notifications` has its own offsets. **This is fan-out / pub/sub.**
 
 So consumer groups are how Kafka does pub/sub *and* queues at the same time, on the same topic, with no special configuration.
+
+We can see partition assignment in action. Spin up two consumers in the same group on a 4-partition topic and ask each which partitions it owns:
+
+```{code-cell} python
+from kafka import KafkaConsumer, KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-consumer-groups"
+GROUP = "demo-cg-analytics"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(name=TOPIC, num_partitions=4, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+
+# Produce a few records so partitions exist with data
+producer = KafkaProducer(bootstrap_servers=BOOTSTRAP)
+for i in range(20):
+    producer.send(TOPIC, key=f"k{i}".encode(), value=b"v")
+producer.flush()
+producer.close()
+
+# Two consumers in the same group
+c1 = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP, group_id=GROUP,
+                   auto_offset_reset="earliest", client_id="c1")
+c2 = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP, group_id=GROUP,
+                   auto_offset_reset="earliest", client_id="c2")
+# Poll both consumers until the group rebalance settles and each has a partition set
+import time
+deadline = time.time() + 15
+a1, a2 = [], []
+while time.time() < deadline:
+    c1.poll(timeout_ms=500); c2.poll(timeout_ms=500)
+    a1 = sorted(tp.partition for tp in c1.assignment())
+    a2 = sorted(tp.partition for tp in c2.assignment())
+    if a1 and a2:
+        break
+print(f"c1 owns: {a1}")
+print(f"c2 owns: {a2}")
+
+# Inspect group state via admin client
+for grp_id, *_ in admin.list_consumer_groups():
+    if grp_id == GROUP:
+        offsets = admin.list_consumer_group_offsets(GROUP)
+        print(f"committed offsets in group {GROUP}: {dict(offsets)}")
+
+c1.close(); c2.close()
+admin.delete_topics([TOPIC])
+admin.close()
+```
 
 > **Core Concept:** This dual behavior is the consumer-group pattern from [Pub/Sub and Messaging Patterns](../../core-concepts/07-application-patterns/02-pubsub-and-messaging.md) — Kafka was the implementation that popularized it.
 

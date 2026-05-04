@@ -51,7 +51,7 @@ Each session follows the same rhythm: **2h theory → 0.5h exercise → 1h theor
 ## Lab Environment
 
 ```bash
-make lab-streaming   # workspace + 3-broker Kafka (KRaft) + Spark 4.0 master + 2 workers
+make lab-streaming   # workspace + 3-broker Kafka (KRaft); Spark runs locally inside workspace
 make down            # stop the lab
 ```
 
@@ -60,13 +60,12 @@ Once running:
 | URL | What |
 |---|---|
 | <http://localhost:3000> | MyST docs — these lessons rendered |
-| <http://localhost:8888> | JupyterLab (workspace) — write notebooks here; Spark driver runs in this container |
-| <http://localhost:8080> | Spark Master UI |
-| <http://localhost:4040> | Spark Driver UI (only while a streaming query runs) |
+| <http://localhost:8888> | JupyterLab (workspace) — write notebooks here; Spark runs in-process |
+| <http://localhost:4040> | Spark UI (only while a streaming query runs) — watermark, micro-batches, query progress |
 | `localhost:19092, 19093, 19094` | Kafka bootstrap servers (from the host) |
 | `kafka-1:9092, kafka-2:9092, kafka-3:9092` | Kafka bootstrap servers (in-cluster, from any container on the lab network) |
 
-The workspace is your Spark driver. PySpark 4.0.0 and `kafka-python` are pre-installed; submit queries directly with `pyspark` or `spark-submit --master spark://spark-master:7077 ...`.
+PySpark 4.0.0 and `kafka-python` are pre-installed in the workspace. SparkSessions in this module run in **local mode** (driver + executor in the same JVM) — the focus here is stream semantics, not cluster ops. The earlier Spark batch ETL module is where you saw the standalone cluster setup.
 
 ## Hands-on Project
 

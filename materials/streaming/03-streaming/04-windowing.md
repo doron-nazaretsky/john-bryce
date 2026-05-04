@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Windowing
 
 Most interesting streaming queries ask "what happened in *this period of time*?" rather than "how many total ever?" Windowing is how we bound an unbounded stream into finite chunks of event time so we can answer those questions.
@@ -55,6 +61,40 @@ Each event belongs to exactly one window. Tumbling windows are the default: `win
 **Use cases:** "pageviews per minute," "errors per hour," any "count per period" dashboard. The simplest and most common shape.
 
 In SQL terms, the equivalent batch query would be `GROUP BY date_trunc('minute', ts)` -- bucketing by truncated time. Tumbling windows are the streaming version of that.
+
+Let's run a 5-second tumbling window over a `rate` stream. We use `rate` (rather than Kafka) because it's trivial to seed and produces a clean, predictable timestamp column.
+
+```{code-cell} python
+import time
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import window, col
+
+spark = (SparkSession.builder
+    .appName("windowing-demo")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
+    .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
+
+stream = (spark.readStream
+    .format("rate")
+    .option("rowsPerSecond", 5)
+    .load())
+
+# 5-second tumbling windows, count rows per window
+windowed = stream.groupBy(window(col("timestamp"), "5 seconds")).count()
+
+query = (windowed.writeStream
+    .format("memory")
+    .queryName("tumbling_demo")
+    .outputMode("update")
+    .start())
+
+time.sleep(15)
+query.stop()
+
+spark.sql("SELECT window.start, window.end, count FROM tumbling_demo ORDER BY window.start").show(truncate=False)
+```
 
 ---
 

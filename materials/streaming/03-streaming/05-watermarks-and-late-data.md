@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Watermarks and Late Data
 
 Late data is a fact, not an exception. A record can arrive 30 seconds after the event happened, or 5 minutes, or an hour. Without some explicit rule about how late is too late, a streaming aggregation has to keep its state forever, "just in case." That's not feasible.
@@ -114,6 +120,45 @@ event_time              record       what happens
 ```
 
 Trace this through carefully. The mechanic is: **the watermark advances as the max event time advances; when a window's end falls below the watermark, the window finalizes and emits**.
+
+A live demo: a `rate` source's `timestamp` column doubles as the event time. We declare a 2-second watermark and aggregate by 5-second windows. After running for a few seconds, we inspect the query's progress to see the watermark Spark has chosen.
+
+```{code-cell} python
+import time, json
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import window, col
+
+spark = (SparkSession.builder
+    .appName("watermark-demo")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
+    .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
+
+stream = (spark.readStream
+    .format("rate")
+    .option("rowsPerSecond", 5)
+    .load())
+
+windowed = (stream
+    .withWatermark("timestamp", "2 seconds")
+    .groupBy(window(col("timestamp"), "5 seconds"))
+    .count())
+
+query = (windowed.writeStream
+    .format("memory")
+    .queryName("wm_demo")
+    .outputMode("update")          # update mode shows running counts as windows fill (append would wait for them to close past the watermark)
+    .start())
+
+time.sleep(15)
+progress = query.lastProgress
+query.stop()
+
+print("event-time watermark Spark picked:", progress["eventTime"].get("watermark"))
+print("max event-time seen so far:        ", progress["eventTime"].get("max"))
+spark.sql("SELECT window.start, window.end, count FROM wm_demo ORDER BY window.start").show(truncate=False)
+```
 
 ---
 

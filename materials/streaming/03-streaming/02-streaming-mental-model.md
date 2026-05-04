@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # The Streaming Mental Model
 
 Before we touch the Spark Structured Streaming API, we need a few concepts straight in our heads. Streaming code is not just "batch code that runs more often." There are five ideas that, once internalized, make every streaming API click. Get them wrong and the API will feel arbitrary.
@@ -26,6 +32,37 @@ Most operations that are trivial on bounded data are tricky on unbounded data:
 | `order by ts` sorts the whole result | You can't sort the whole stream — the whole stream doesn't end. |
 
 The general fix is to **introduce time** as a structuring dimension. We don't ask "how many pageviews?" -- we ask "how many pageviews in this 1-minute window?" Now the question is bounded again, even though the input isn't.
+
+To make "unbounded but processed in micro-batches" concrete, here's the simplest possible streaming query: a `rate` source produces one row per second, and we let it run for a few seconds into an in-memory table. The DataFrame represents an infinite stream; the query observes a slice of it.
+
+```{code-cell} python
+import time
+from pyspark.sql import SparkSession
+
+spark = (SparkSession.builder
+    .appName("mental-model-demo")
+    .master("local[2]")
+    .config("spark.sql.shuffle.partitions", "2")
+    .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
+
+stream = (spark.readStream
+    .format("rate")
+    .option("rowsPerSecond", 2)
+    .load())
+
+query = (stream.writeStream
+    .format("memory")
+    .queryName("rate_demo")
+    .outputMode("append")
+    .start())
+
+time.sleep(8)
+query.stop()
+
+# Even after we stop, what we DID see is finite — but the underlying stream was unbounded.
+spark.sql("SELECT count(*) AS rows_seen, min(timestamp) AS first, max(timestamp) AS last FROM rate_demo").show(truncate=False)
+```
 
 ---
 

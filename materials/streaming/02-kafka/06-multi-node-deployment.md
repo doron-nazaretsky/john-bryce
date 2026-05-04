@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Multi-Node Deployment
 
 Kafka is built for scale -- not as an afterthought, but as the central architectural choice. The whole partition / replica / broker model exists so a cluster can be expanded by adding boxes. This chapter walks through what a multi-node cluster actually looks like, what KRaft means, and *why* this design scales.
@@ -88,6 +94,22 @@ Inspect this in the lab with:
 ```bash
 docker exec kafka-1 kafka-topics.sh --describe --topic pageviews --bootstrap-server kafka-1:9092
 ```
+
+You can also ask the cluster directly from Python — `describe_cluster` enumerates every broker:
+
+```{code-cell} python
+from kafka.admin import KafkaAdminClient
+
+admin = KafkaAdminClient(bootstrap_servers="kafka-1:9092,kafka-2:9092,kafka-3:9092")
+cluster = admin.describe_cluster()
+print(f"cluster_id={cluster['cluster_id']}")
+print(f"controller=broker-{cluster['controller_id']}")
+for b in cluster["brokers"]:
+    print(f"  broker {b['node_id']}  host={b['host']}:{b['port']}  rack={b.get('rack')}")
+admin.close()
+```
+
+Three brokers, each reachable on its own host, with one of them currently acting as KRaft controller. That's the lab cluster.
 
 ---
 

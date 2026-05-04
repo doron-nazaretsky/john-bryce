@@ -1,3 +1,9 @@
+---
+kernelspec:
+  name: python3
+  display_name: Python 3
+  language: python
+---
 # Broker, Topic, Partition: The Kafka Model
 
 Kafka has four building blocks. Almost everything else in Kafka -- producers, consumers, groups, replication, retention -- is a consequence of how those four blocks fit together. Once they click, the rest of Kafka stops being mysterious.
@@ -72,6 +78,27 @@ Each broker stores some partitions on its local disk. When a producer wants to w
 
 This means: as you add brokers, you can spread more partitions across more disks and more network cards. Scaling is mostly "add a broker, rebalance partitions."
 
+Let's create a topic with 3 partitions and inspect how Kafka spreads them. We'll reuse this `demo-broker-model` topic for the next demo too.
+
+```{code-cell} python
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-broker-model"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(name=TOPIC, num_partitions=3, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+
+# Describe the topic to see partition -> leader broker assignment
+for t in admin.describe_topics([TOPIC]):
+    for p in t["partitions"]:
+        print(f"partition {p['partition']}  leader=broker-{p['leader']}  replicas={p['replicas']}")
+```
+
 ---
 
 ## How Records Land on Partitions
@@ -86,6 +113,47 @@ A producer publishing a record decides which partition it goes to. Three common 
 # kafka-python style
 producer.send("pageviews", key=b"user-42", value=b"...")  # always lands on the same partition
 producer.send("pageviews", value=b"...")                  # round-robin / sticky
+```
+
+We can observe this directly: send several keyed records and several keyless ones, then read them back and look at which partition they landed on.
+
+```{code-cell} python
+from kafka import KafkaProducer, KafkaConsumer
+from kafka.admin import KafkaAdminClient
+from kafka.errors import TopicAlreadyExistsError
+from kafka.admin import NewTopic
+
+BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+TOPIC = "demo-broker-model"
+
+admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
+try:
+    admin.create_topics([NewTopic(name=TOPIC, num_partitions=3, replication_factor=3)])
+except TopicAlreadyExistsError:
+    pass
+
+producer = KafkaProducer(bootstrap_servers=BOOTSTRAP)
+# Same key -> always same partition
+for _ in range(3):
+    producer.send(TOPIC, key=b"user-42", value=b"keyed-A")
+# Different keys -> hashed across partitions
+for k in [b"user-1", b"user-2", b"user-3", b"user-4", b"user-5"]:
+    producer.send(TOPIC, key=k, value=b"keyed-other")
+# No key -> spread by sticky/round-robin
+for _ in range(5):
+    producer.send(TOPIC, value=b"no-key")
+producer.flush()
+
+consumer = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP,
+                         auto_offset_reset="earliest",
+                         consumer_timeout_ms=3000,
+                         group_id=None)
+for r in consumer:
+    print(f"partition={r.partition}  key={r.key}  value={r.value}")
+consumer.close()
+producer.close()
+admin.delete_topics([TOPIC])
+admin.close()
 ```
 
 The choice of key is a **design decision with consequences**:
