@@ -5,7 +5,7 @@ Same pattern as scaffolds/spark-etl/.scaffold-test.py.
 
 Phases:
   * reset   — wipe volumes (down -v --remove-orphans). Only on --fresh.
-  * fail    — bring up the stack, wait for streaming-jupyter healthy, run
+  * fail    — bring up the stack, wait for project-streaming-jupyter healthy, run
               pytest. Expect non-zero exit and `NotImplementedError` in the
               output (student stubs).
   * pass    — re-run after solutions are overlaid; expect green.
@@ -22,7 +22,7 @@ from pathlib import Path
 
 
 FAIL_MARKER = "NotImplementedError"
-JUPYTER_CONTAINER = "streaming-jupyter"
+JUPYTER_CONTAINER = "project-streaming-jupyter"
 JUPYTER_HEALTHY_TIMEOUT_S = 300
 POLL_INTERVAL_S = 5
 
@@ -77,7 +77,7 @@ def phase_reset() -> int:
 def phase_fail() -> int:
     if _bring_up() != 0:
         return 2
-    rc, out = run(["make", "test-streaming"])
+    rc, out = run(["make", "test"])
     if rc == 0:
         print("[scaffold-test] FAIL phase expected non-zero, got 0", file=sys.stderr)
         return 1
@@ -88,9 +88,9 @@ def phase_fail() -> int:
 
 
 def phase_pass() -> int:
-    rc, _ = run(["make", "test-streaming"])
+    rc, _ = run(["make", "test"])
     if rc != 0:
-        print(f"[scaffold-test] PASS phase: test-streaming returned {rc}", file=sys.stderr)
+        print(f"[scaffold-test] PASS phase: test returned {rc}", file=sys.stderr)
         return 1
     return 0
 

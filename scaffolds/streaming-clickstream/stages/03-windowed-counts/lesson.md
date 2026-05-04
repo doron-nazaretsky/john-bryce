@@ -57,7 +57,7 @@ the requirements are:
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage3.py::test_part_a -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage3.py::test_part_a -v
 ```
 
 The test produces 6 events in a single 1-minute window plus 1 "pusher"
@@ -93,7 +93,7 @@ near-late). Re-check the order of operations.
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage3.py::test_part_b -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage3.py::test_part_b -v
 ```
 
 ## Definition of Done

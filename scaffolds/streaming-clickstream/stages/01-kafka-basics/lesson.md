@@ -55,7 +55,7 @@ calls — that's how production code does it. Lazy-init it on first call.
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage1.py::test_part_a -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage1.py::test_part_a -v
 ```
 
 Expected output: one passing test that produces 5 events and verifies them
@@ -85,7 +85,7 @@ Requirements:
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage1.py::test_part_b -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage1.py::test_part_b -v
 ```
 
 The test checks two things:
@@ -110,12 +110,12 @@ the commit. Make sure you call `consumer.commit()` before returning.
 
 - Run `make events-start` and let the producer run for 10 seconds. Then
   open a second terminal and run a quick consumer (`docker exec
-  streaming-jupyter python -c "..."`) — does your consumer keep up with
+  project-streaming-jupyter python -c "..."`) — does your consumer keep up with
   the producer?
 - What would happen if you started two consumers with the same `group_id`
   against the live producer? With different `group_id`s? Predict, then try
   it.
-- Stop one of the brokers (`docker stop kafka-2`). Does the producer keep
+- Stop one of the brokers (`docker stop project-kafka-2`). Does the producer keep
   working? Does the consumer? Why? (You'll come back to this in Stage 2's
   Theory B block.)
 

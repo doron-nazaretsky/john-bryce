@@ -16,7 +16,7 @@ def _env(name: str, default: str) -> str:
 # Kafka
 KAFKA_BOOTSTRAP_SERVERS = _env(
     "KAFKA_BOOTSTRAP_SERVERS",
-    "kafka-1:9092,kafka-2:9092,kafka-3:9092",
+    "project-kafka-1:9092,project-kafka-2:9092,project-kafka-3:9092",
 )
 PAGEVIEWS_TOPIC = _env("PAGEVIEWS_TOPIC", "pageviews")
 

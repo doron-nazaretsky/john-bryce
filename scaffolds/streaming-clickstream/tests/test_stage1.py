@@ -49,11 +49,16 @@ def test_part_a(patch_topic):
     verifier.close()
 
     assert len(received) == len(events), f"expected {len(events)} records, got {len(received)}"
-    # Producer must key by user_id so per-user ordering is preserved.
-    for (key, value), expected in zip(received, events):
-        assert key == expected["user_id"], "events should be keyed by user_id"
-        assert value["page"] == expected["page"]
-        assert value["ts"] == expected["ts"]
+    # Kafka guarantees order *within* a partition. With multiple partitions and
+    # different keys, the verifier sees partitions in non-deterministic order,
+    # so we match by key (the producer must key each event by its user_id).
+    expected_by_key = {e["user_id"]: e for e in events}
+    assert {k for k, _ in received} == set(expected_by_key), (
+        "events should be keyed by user_id"
+    )
+    for key, value in received:
+        assert value["page"] == expected_by_key[key]["page"]
+        assert value["ts"] == expected_by_key[key]["ts"]
 
 
 def test_part_b(patch_topic):

@@ -35,7 +35,7 @@ from kafka.errors import TopicAlreadyExistsError
 # the bootstrap case where the package isn't yet importable.
 BOOTSTRAP_SERVERS = os.environ.get(
     "KAFKA_BOOTSTRAP_SERVERS",
-    "kafka-1:9092,kafka-2:9092,kafka-3:9092",
+    "project-kafka-1:9092,project-kafka-2:9092,project-kafka-3:9092",
 )
 TOPIC = os.environ.get("PAGEVIEWS_TOPIC", "pageviews")
 PIDFILE = Path("/tmp/streaming-clickstream-producer.pid")

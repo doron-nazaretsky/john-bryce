@@ -55,7 +55,7 @@ should:
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage2.py::test_part_a -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage2.py::test_part_a -v
 ```
 
 The test produces 20 events, starts your query, waits up to 90 seconds for
@@ -89,7 +89,7 @@ the test (last resort) or check that the trigger is firing in time.
 **Acceptance:**
 
 ```bash
-docker exec streaming-jupyter pytest /home/jovyan/work/tests/test_stage2.py::test_part_b -v
+docker exec project-streaming-jupyter pytest /home/jovyan/work/tests/test_stage2.py::test_part_b -v
 ```
 
 ## Definition of Done

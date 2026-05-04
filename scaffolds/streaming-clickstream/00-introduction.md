@@ -3,23 +3,26 @@
 ## Getting Started
 
 ```bash
-make lab-streaming        # bring up the cluster (Kafka × 3, Spark master + 2 workers, Jupyter)
-make events-start         # start the synthetic pageview producer (in streaming-jupyter)
+make run                  # bring up the cluster (Kafka × 3, Spark master + 2 workers, Jupyter)
+make events-start         # start the synthetic pageview producer (in project-streaming-jupyter)
 make events-stop          # stop the producer
 make events-status        # show event count and producer status
-make test-streaming       # run the stage tests
+make test                 # run the stage tests
 ```
 
-Once `lab-streaming` is up:
+Once `make run` is up:
 
 | URL | What |
 |---|---|
-| <http://localhost:8888> | JupyterLab — open notebooks here |
-| <http://localhost:8080> | Spark Master UI |
-| <http://localhost:4040> | Spark Driver UI (only while a query runs) |
-| `localhost:19092,19093,19094` | Kafka brokers (from the host) |
+| <http://localhost:18888> | JupyterLab — open notebooks here (token: `devtoken`) |
+| <http://localhost:14040> | Spark Driver UI (only while a query runs) |
+| `localhost:29092,29093,29094` | Kafka brokers (from the host) |
 
-In-cluster, the brokers are reachable as `kafka-1:9092,kafka-2:9092,kafka-3:9092`.
+> Spark runs in `local[*]` mode inside the Jupyter container — there is no
+> separate Spark master/workers cluster. The teaching focus here is Kafka and
+> Structured Streaming concepts, both of which work identically in local mode.
+
+In-cluster, the brokers are reachable as `project-kafka-1:9092,project-kafka-2:9092,project-kafka-3:9092`.
 
 ---
 
@@ -137,10 +140,10 @@ You modify four files: `pipeline/{producer,consumer,ingest_job,windowed_job}.py`
 
 | Command | Runs |
 |---|---|
-| `make test-streaming` | all stage tests |
-| `docker exec streaming-jupyter pytest tests/test_stage1.py -v` | stage 1 only |
-| `docker exec streaming-jupyter pytest tests/test_stage2.py -v` | stage 2 only |
-| `docker exec streaming-jupyter pytest tests/test_stage3.py -v` | stage 3 only |
+| `make test` | all stage tests |
+| `docker exec project-streaming-jupyter pytest tests/test_stage1.py -v` | stage 1 only |
+| `docker exec project-streaming-jupyter pytest tests/test_stage2.py -v` | stage 2 only |
+| `docker exec project-streaming-jupyter pytest tests/test_stage3.py -v` | stage 3 only |
 
 Tests call your functions as black boxes. They reset Kafka topics and parquet
 output directories between tests so state never leaks.
@@ -156,4 +159,4 @@ in class and finish it individually. Submit:
 - A short `DESIGN.md` covering: which delivery guarantee you chose for the
   consumer, what watermark threshold you picked and why, how you verified
   the checkpoint-based recovery in Stage 2B.
-- `make test-streaming` passing against your code.
+- `make test` passing against your code.

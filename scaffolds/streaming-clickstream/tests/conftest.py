@@ -1,14 +1,14 @@
 """Pytest fixtures shared across all stage tests. Provided — do not edit.
 
 Conventions:
-  * One session-scoped SparkSession with a local[2] master so tests don't
-    depend on the standalone cluster.
+  * One session-scoped SparkSession in local[*] mode (the project does not run
+    a separate Spark cluster — see compose.yml for the rationale).
   * Each test gets a fresh, uniquely-named topic to isolate state.
-  * Each test gets fresh, unique tmp dirs for parquet output and checkpoint
-    so streaming queries don't collide.
+  * Each test gets fresh, unique tmp dirs for parquet output and checkpoint.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from uuid import uuid4
@@ -24,7 +24,9 @@ from helpers import test_utils
 def spark() -> SparkSession:
     spark = (
         SparkSession.builder
-        .master("local[2]")
+        # local[2] keeps test parallelism low — these tests are tiny and don't
+        # need every host core. Override via SPARK_MASTER_URL=local[*] if you do.
+        .master(os.environ.get("SPARK_MASTER_URL", "local[2]"))
         .appName("streaming-clickstream-tests")
         .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0")
         .config("spark.sql.shuffle.partitions", "4")

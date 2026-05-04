@@ -87,6 +87,8 @@ def produce_events(
         key_serializer=lambda k: k.encode("utf-8"),
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         acks="all",
+        retries=5,
+        retry_backoff_ms=500,
     )
     try:
         for event in events:
@@ -98,11 +100,16 @@ def produce_events(
 
 
 def read_parquet(path: str | Path) -> list[dict]:
-    """Read every parquet file under ``path`` and return rows as dicts."""
+    """Read every parquet file under ``path`` and return rows as dicts.
+
+    Skips files that are still mid-write (0 bytes). Spark's streaming sink
+    occasionally surfaces such transient files between commits, and pyarrow
+    fails the whole read if any input is empty.
+    """
     p = Path(path)
     if not p.exists():
         return []
-    files = list(p.rglob("*.parquet"))
+    files = [f for f in p.rglob("*.parquet") if f.stat().st_size > 0]
     if not files:
         return []
     table = pq.read_table([str(f) for f in files])

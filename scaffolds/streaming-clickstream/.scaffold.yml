@@ -2,10 +2,11 @@ name: streaming-clickstream
 title: Real-Time Clickstream — Kafka + Spark Structured Streaming
 description: >
   Synthetic pageview events flow through a 3-broker Kafka cluster and into a
-  Spark Structured Streaming pipeline. Students implement a producer, a
-  consumer, an ingest job (Kafka → parquet with checkpointing), and a windowed
-  count job (per-page pageviews per 1-minute window with watermarks). Built
-  for an 8 GB laptop. Lighter than spark-etl — three stages, two parts each.
+  Spark Structured Streaming pipeline (Spark runs in local[*] mode inside the
+  Jupyter driver — no separate Spark cluster). Students implement a producer,
+  a consumer, an ingest job (Kafka → parquet with checkpointing), and a
+  windowed count job (per-page pageviews per 1-minute window with watermarks).
+  Built for an 8 GB laptop. Lighter than spark-etl — three stages, two parts each.
 exclude:
   - "**/__pycache__/"
   - ".pytest_cache/"
@@ -14,7 +15,7 @@ exclude:
 post_init: .post-init.py
 next_steps:
   - "cd {target}"
-  - "make lab-streaming         # bring up the Kafka + Spark cluster"
-  - "open http://localhost:8888  # Jupyter driver"
+  - "make run                   # bring up the Kafka + Spark cluster"
+  - "open http://localhost:18888  # Jupyter driver (token: devtoken)"
   - "make events-start          # start the synthetic pageview producer"
-  - "make test-streaming        # run the stage pytest suite inside streaming-jupyter"
+  - "make test                  # run the stage pytest suite inside project-streaming-jupyter"
