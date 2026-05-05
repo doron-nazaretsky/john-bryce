@@ -126,14 +126,30 @@ def validate_target(target: Path, *, force: bool) -> None:
         if not target.is_dir():
             print(f"[new-project] target {target} exists and is not a directory", file=sys.stderr)
             sys.exit(1)
-        # Allow existing dir if empty (ignoring .git) OR --force.
+        # Empty (ignoring .git) → fine. Non-empty → either --force was passed
+        # (script use, e.g. via Make), or we ask the user interactively.
         children = [p for p in target.iterdir() if p.name != ".git"]
         if children and not force:
-            print(
-                f"[new-project] target {target} is not empty (pass --force to overlay into it)",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+            if not sys.stdin.isatty():
+                print(
+                    f"[new-project] target {target} is not empty (pass --force to overlay into it)",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print(f"[new-project] target {target} already contains:")
+            for p in sorted(children)[:10]:
+                print(f"    {p.name}{'/' if p.is_dir() else ''}")
+            if len(children) > 10:
+                print(f"    ... and {len(children) - 10} more")
+            print("[new-project] .git/ (if present) will be left untouched.")
+            try:
+                resp = input("Overlay the scaffold on top of these files? [y/N]: ").strip().lower()
+            except (KeyboardInterrupt, EOFError):
+                print("\n[new-project] cancelled", file=sys.stderr)
+                sys.exit(130)
+            if resp not in {"y", "yes"}:
+                print("[new-project] aborted by user", file=sys.stderr)
+                sys.exit(1)
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
 
