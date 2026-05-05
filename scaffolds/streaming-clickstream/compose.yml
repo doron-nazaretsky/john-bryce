@@ -151,7 +151,7 @@ services:
       - PAGEVIEWS_TOPIC=pageviews
       - DATA_DIR=/home/jovyan/work/data
       - CHECKPOINT_DIR=/home/jovyan/work/checkpoints
-      - CHOWN_EXTRA=/home/jovyan/work/data,/home/jovyan/work/checkpoints
+      - CHOWN_EXTRA=/home/jovyan/work/data,/home/jovyan/work/checkpoints,/home/jovyan/work/notebooks
       - CHOWN_EXTRA_OPTS=-R
     working_dir: /home/jovyan/work
     volumes:
