@@ -1,0 +1,30 @@
+// Dev Container config for VS Code's "Attach to Running Container" flow.
+//
+// We deliberately do NOT use this file to start the stack — `make run` is the
+// canonical entry point so the lab can be controlled from scripts/CI without
+// VS Code in the loop. This file only kicks in once you attach via
+// "Dev Containers: Attach to Running Container..." → it tells VS Code which
+// folder to open, which interpreter to default to, and which extensions to
+// install into the in-container VS Code Server.
+//
+// First attach: ~30s for server download + extension install. The server lives
+// in the `vscode_server` named volume (see compose.yml) so subsequent attaches
+// are instant, even across `make down` / `make run` cycles.
+{
+  "name": "streaming-clickstream",
+  "workspaceFolder": "/home/jovyan/work",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter",
+        "ms-toolsai.jupyter-renderers"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python",
+        "python.terminal.activateEnvironment": false,
+        "jupyter.notebookFileRoot": "${workspaceFolder}"
+      }
+    }
+  }
+}

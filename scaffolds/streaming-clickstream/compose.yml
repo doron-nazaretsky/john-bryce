@@ -163,6 +163,10 @@ services:
       - ./notebooks:/home/jovyan/work/notebooks
       - streaming_data:/home/jovyan/work/data
       - streaming_checkpoints:/home/jovyan/work/checkpoints
+      # Persist the VS Code Server + installed extensions across container
+      # recreates so "Attach to Running Container" is instant after the first
+      # ~30s download. See .devcontainer/devcontainer.json for the extension list.
+      - vscode_server:/home/jovyan/.vscode-server
     command: ["start-notebook.sh", "--ServerApp.token=devtoken", "--ServerApp.password=", "--ServerApp.allow_origin=*", "--ServerApp.allow_remote_access=True"]
     ports:
       - "18888:8888"
@@ -211,3 +215,4 @@ services:
 volumes:
   streaming_data:
   streaming_checkpoints:
+  vscode_server:
