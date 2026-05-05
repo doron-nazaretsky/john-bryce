@@ -85,6 +85,7 @@ Once running:
 | <http://localhost:3000> | MyST docs — these lessons rendered |
 | <http://localhost:8888> | JupyterLab (workspace) — write notebooks here; Spark runs in-process |
 | <http://localhost:4040> | Spark UI (only while a streaming query runs) — watermark, micro-batches, query progress |
+| <http://localhost:18080> | Kafka UI (Kafbat) — browse topics, partitions, messages, consumer-group lag |
 | `localhost:19092, 19093, 19094` | Kafka bootstrap servers (from the host) |
 | `kafka-1:9092, kafka-2:9092, kafka-3:9092` | Kafka bootstrap servers (in-cluster, from any container on the lab network) |
 

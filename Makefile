@@ -146,6 +146,7 @@ lab-streaming: lab-preflight
 	@echo "Kafka brokers (in-cluster): kafka-1:9092, kafka-2:9092, kafka-3:9092"
 	@echo "Kafka brokers (host):       localhost:19092, localhost:19093, localhost:19094"
 	@echo "Spark UI:                   http://localhost:4040  (while a query is running)"
+	@echo "Kafka UI (Kafbat):          http://localhost:18080  (topics, partitions, consumer-group lag)"
 
 # ─── Project scaffolds ──────────────────────────────────────────────────────
 

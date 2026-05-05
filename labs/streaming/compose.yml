@@ -13,7 +13,8 @@
 # Sizing: tuned for 8 GB laptops.
 #   workspace:          ~3g (Spark local + kernel + MyST node process)
 #   kafka-1/2/3:        320m each   (~960m total)
-#   total guaranteed:   ~4g
+#   kafka-ui:           400m
+#   total guaranteed:   ~4.4g
 #
 # Usage: make lab-streaming
 
@@ -129,4 +130,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
+
+  # Web UI for inspecting the Kafka cluster (topics, partitions, messages,
+  # consumer groups, lag). Think pgAdmin for Kafka. Kafbat is the actively
+  # maintained fork of provectuslabs/kafka-ui — same image API, same env vars.
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: kafka-ui
+    hostname: kafka-ui
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=streaming-lab
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+      - DYNAMIC_CONFIG_ENABLED=true
+    ports:
+      - "18080:8080"
+    mem_limit: 400m
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
     restart: unless-stopped

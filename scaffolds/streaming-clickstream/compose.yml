@@ -12,7 +12,7 @@
 # parallel with the main `labs/streaming/` lab (which uses the unprefixed names
 # and the default ports).
 #
-# Sizing for an 8 GB laptop: ~4.3 GB guaranteed total (3 × 512m Kafka + 2.8 GB Jupyter).
+# Sizing for an 8 GB laptop: ~4.7 GB guaranteed total (3 × 512m Kafka + 2.8 GB Jupyter + 400m kafka-ui).
 
 services:
   project-kafka-1:
@@ -174,6 +174,31 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    restart: unless-stopped
+
+  # Web UI for inspecting the Kafka cluster (topics, partitions, messages,
+  # consumer groups, lag). Think pgAdmin for Kafka. Kafbat is the actively
+  # maintained fork of provectuslabs/kafka-ui — same image API, same env vars.
+  # Host port shifted to 28080 to stay out of the way of the main streaming lab
+  # (which uses 18080) so both can run side-by-side.
+  project-kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: project-kafka-ui
+    hostname: project-kafka-ui
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=streaming-clickstream
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=project-kafka-1:9092,project-kafka-2:9092,project-kafka-3:9092
+      - DYNAMIC_CONFIG_ENABLED=true
+    ports:
+      - "28080:8080"
+    mem_limit: 400m
+    depends_on:
+      project-kafka-1:
+        condition: service_healthy
+      project-kafka-2:
+        condition: service_healthy
+      project-kafka-3:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -33,6 +33,7 @@ run: stop
 	@echo " streaming-clickstream project is ready."
 	@echo "   JupyterLab:        http://localhost:18888  (token: devtoken)"
 	@echo "   Spark Driver UI:   http://localhost:14040  (after a query starts)"
+	@echo "   Kafka UI (Kafbat): http://localhost:28080  (topics, partitions, consumer-group lag)"
 	@echo "   Kafka brokers:     localhost:29092, localhost:29093, localhost:29094"
 	@echo "   Producer:          make events-start / events-status / events-stop"
 	@echo "=============================================================="

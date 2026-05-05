@@ -16,6 +16,7 @@ Once `make run` is up:
 |---|---|
 | <http://localhost:18888> | JupyterLab — open notebooks here (token: `devtoken`) |
 | <http://localhost:14040> | Spark Driver UI (only while a query runs) |
+| <http://localhost:28080> | Kafka UI (Kafbat) — browse topics, partitions, messages, consumer-group lag |
 | `localhost:29092,29093,29094` | Kafka brokers (from the host) |
 
 > Spark runs in `local[*]` mode inside the Jupyter container — there is no
