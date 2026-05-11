@@ -222,14 +222,16 @@ This is essentially Stage 2 Part B of the project.
 
 ## What's Coming Next
 
-So far the queries have been stateless -- each record turns into one output row. The interesting streaming queries are *stateful*:
+We've shown `checkpointLocation` as a required option but treated it as a black box -- "a path Spark needs." The next chapter opens that box: what's in a checkpoint, how it gets committed, and why a restart resumes cleanly without duplicates or losses. That closes the durability arc that started with Kafka acks.
+
+After that, we turn to *stateful* queries:
 
 - "Count pageviews per page per minute."
 - "Find the top 10 pages every 5 minutes."
 - "Detect users who visited 5 different pages in 30 seconds."
 
-Those need windowing and watermarks. Next two chapters.
+Those need windowing and watermarks -- the two chapters after checkpoints.
 
 ---
 
-[← Previous: Streaming Mental Model](02-streaming-mental-model.md) | [Next: Windowing →](04-windowing.md)
+[← Previous: Streaming Mental Model](02-streaming-mental-model.md) | [Next: Checkpoints and Fault Tolerance →](04-checkpoints-and-fault-tolerance.md)

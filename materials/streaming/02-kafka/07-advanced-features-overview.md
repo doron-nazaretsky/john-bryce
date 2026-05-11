@@ -39,50 +39,85 @@ A quirk: a `null` value is treated as a **tombstone** -- once compacted, it dele
 
 You enable compaction with `cleanup.policy=compact` on the topic.
 
-We can create a compacted topic and produce two records under the same key — the second one is the "current" value:
+We can create a compacted topic and produce two records under the same key — the second one is the "current" value.
+
+**Step 1 — create the compacted topic.**
 
 ```{code-cell} python
-from kafka import KafkaProducer, KafkaConsumer
 from kafka.admin import KafkaAdminClient, NewTopic
-from kafka.errors import TopicAlreadyExistsError
+from kafka.errors import TopicAlreadyExistsError, UnknownTopicOrPartitionError
+import time
 
 BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
 TOPIC = "demo-compacted-topic"
 
 admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
 try:
-    admin.create_topics([NewTopic(
-        name=TOPIC, num_partitions=1, replication_factor=3,
-        topic_configs={"cleanup.policy": "compact", "min.cleanable.dirty.ratio": "0.01"},
-    )])
-except TopicAlreadyExistsError:
+    admin.delete_topics([TOPIC]); time.sleep(1)   # idempotent: re-runs start clean
+except UnknownTopicOrPartitionError:
     pass
+admin.create_topics([NewTopic(
+    name=TOPIC, num_partitions=1, replication_factor=3,
+    topic_configs={"cleanup.policy": "compact", "min.cleanable.dirty.ratio": "0.01"},
+)])
+print(f"topic {TOPIC!r} created with cleanup.policy=compact")
+```
 
-# Verify the topic is configured for compaction
+**Step 2 — verify the topic config.**
+
+```{code-cell} python
 from kafka.admin import ConfigResource, ConfigResourceType
+
 configs = admin.describe_configs([ConfigResource(ConfigResourceType.TOPIC, TOPIC)])
 for cfg in configs:
     for entry in cfg.resources[0][4]:
         if entry[0] == "cleanup.policy":
             print(f"cleanup.policy = {entry[1]}")
+```
 
-# Produce two values under the same key (only the last one survives compaction)
+**Step 3 — produce two values under the same key.** Only the last one will survive compaction.
+
+```{code-cell} python
+from kafka import KafkaProducer
+
 producer = KafkaProducer(bootstrap_servers=BOOTSTRAP)
 producer.send(TOPIC, key=b"user-42", value=b'{"name":"Alice"}')
 producer.send(TOPIC, key=b"user-42", value=b'{"name":"Alicia M."}')
 producer.flush()
 producer.close()
+print("produced 2 records under key 'user-42'")
+```
 
-# Read back both records (compaction is asynchronous; for a brand-new topic both will still be there)
+**Step 4 — read back what's in the log right now.** Compaction is asynchronous, so for a brand-new topic both records are still there. Explicit `poll()` so the read step is visible; `group_id=None` means no offsets are tracked.
+
+```{code-cell} python
+from kafka import KafkaConsumer
+import time
+
 consumer = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP,
                          auto_offset_reset="earliest",
-                         consumer_timeout_ms=2000, group_id=None)
-for r in consumer:
-    print(f"offset={r.offset} key={r.key} value={r.value}")
-consumer.close()
+                         enable_auto_commit=False,
+                         group_id=None)
+deadline = time.time() + 10
+got_any = False
+while time.time() < deadline:
+    batch = consumer.poll(timeout_ms=1000)
+    if batch:
+        got_any = True
+        for records in batch.values():
+            for r in records:
+                print(f"offset={r.offset} key={r.key} value={r.value}")
+    elif got_any:
+        break
+```
 
+**Step 5 — clean up.**
+
+```{code-cell} python
+consumer.close()
 admin.delete_topics([TOPIC])
 admin.close()
+print(f"closed consumer and deleted topic {TOPIC!r}")
 ```
 
 ---
@@ -168,24 +203,6 @@ CREATE STREAM pageviews_per_minute AS
 ```
 
 We use Spark Structured Streaming in this course because the previous course used Spark batch and we're building on that. In a Kafka-native stack, Kafka Streams or ksqlDB might be the right choice instead. The semantics overlap heavily; the picking criteria are mostly ecosystem fit (Java vs Python, existing Spark expertise, etc.).
-
----
-
-## 6. MirrorMaker 2
-
-For multi-cluster topologies -- replicating between data centers, migrating between clusters, building a disaster-recovery copy -- Kafka ships **MirrorMaker 2**. It uses Kafka Connect under the hood to copy topics from one cluster to another, preserving offsets and partitions.
-
-You won't need this in the project. Recognize the name when you see it in cross-region or cross-cloud architectures.
-
----
-
-## What's *Not* On This List
-
-A few things you may have heard of that we don't cover:
-
-- **ZooKeeper-mode upgrade paths.** New clusters use KRaft. We don't teach the migration.
-- **JMX metrics, Cruise Control, MirrorMaker rebalance plans.** Operational topics, important in production, beyond a 12-hour course.
-- **Tiered storage.** A relatively new feature for offloading old segments to S3-like cold storage. Useful at scale, not for our 8 GB lab.
 
 ---
 

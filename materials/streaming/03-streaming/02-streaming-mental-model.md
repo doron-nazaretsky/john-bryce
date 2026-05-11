@@ -44,7 +44,6 @@ spark = (SparkSession.builder
     .master("local[2]")
     .config("spark.sql.shuffle.partitions", "2")
     .getOrCreate())
-spark.sparkContext.setLogLevel("WARN")
 
 stream = (spark.readStream
     .format("rate")
@@ -135,7 +134,7 @@ record arrives:      event_time = 12:00:23  (lateness = 4m37s)
 
 The system has to decide: do we *include* this record in the 12:00–12:01 window we may have already emitted? Do we re-emit the window with the new value? Do we drop the record?
 
-The answer is: it depends on **how late is too late**, which is the [watermark](05-watermarks-and-late-data.md). For now: every streaming system needs a policy for lateness, and that policy is a first-class part of the design.
+The answer is: it depends on **how late is too late**, which is the [watermark](06-watermarks-and-late-data.md). For now: every streaming system needs a policy for lateness, and that policy is a first-class part of the design.
 
 ---
 

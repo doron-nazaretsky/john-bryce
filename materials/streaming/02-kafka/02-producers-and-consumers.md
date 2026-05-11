@@ -16,15 +16,15 @@ We'll use `kafka-python` for the examples because that's what the project uses. 
 
 A producer is a long-lived client that appends records to topics. Its job is small: serialize a record, decide which partition it belongs to, batch records together for efficiency, and send them to the right broker.
 
+**Step 1 — recreate the topic so re-running the chapter is idempotent.**
+
 ```{code-cell} python
-from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import UnknownTopicOrPartitionError, TopicAlreadyExistsError
-import json, time
+import time
 
 BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
 
-# Reset the topic so this cell is idempotent — run it as many times as you like.
 admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
 try:
     admin.delete_topics(["pageviews"]); time.sleep(1)
@@ -34,7 +34,14 @@ try:
     admin.create_topics([NewTopic(name="pageviews", num_partitions=6, replication_factor=3)])
 except TopicAlreadyExistsError:
     pass
-admin.close()
+print("topic 'pageviews' ready with 6 partitions")
+```
+
+**Step 2 — create a producer and send one record.**
+
+```{code-cell} python
+from kafka import KafkaProducer
+import json
 
 producer = KafkaProducer(
     bootstrap_servers=BOOTSTRAP,
@@ -48,6 +55,7 @@ producer.send(
     value={"user_id": "user-42", "page": "/checkout", "ts": "2026-05-03T10:00:00Z"},
 )
 producer.flush()   # block until all in-flight records are acknowledged
+producer.close()
 print("sent")
 ```
 
@@ -90,22 +98,23 @@ Setting `linger.ms=10` means "wait up to 10ms to fill the batch before sending."
 
 A consumer is also a long-lived client. It subscribes to one or more topics and pulls records.
 
+**Step 1 — reset the consumer group so re-running this section always replays from offset 0.**
+
 ```{code-cell} python
-from kafka import KafkaConsumer
-from kafka.admin import KafkaAdminClient
 from kafka.errors import GroupIdNotFoundError
-import json
 
-BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
 GROUP = "analytics-service"
-
-# Reset the consumer group so re-running this cell always reads from the start.
-admin = KafkaAdminClient(bootstrap_servers=BOOTSTRAP)
 try:
     admin.delete_consumer_groups([GROUP])
 except GroupIdNotFoundError:
     pass
-admin.close()
+print(f"group {GROUP!r} reset")
+```
+
+**Step 2 — create the consumer.** Manual offset commits, JSON deserialization, start from the beginning if no offset is committed yet.
+
+```{code-cell} python
+from kafka import KafkaConsumer
 
 consumer = KafkaConsumer(
     "pageviews",
@@ -115,14 +124,34 @@ consumer = KafkaConsumer(
     enable_auto_commit=False,
     value_deserializer=lambda b: json.loads(b.decode("utf-8")),
     key_deserializer=lambda b: b.decode("utf-8") if b else None,
-    consumer_timeout_ms=8000,       # exit the iterator after 8s of no records (demo only)
 )
+print("consumer ready")
+```
 
-for record in consumer:
-    print(f"partition={record.partition} offset={record.offset} key={record.key} value={record.value}")
-    consumer.commit()               # explicitly mark "I'm done with this offset"
+**Step 3 — explicit poll loop: pull a batch, process, commit, repeat until idle.** We use `poll()` directly rather than `for r in consumer:` so each network round-trip is visible. The first `poll()` after a fresh consumer is often spent on the group-join handshake and returns nothing, so we don't exit on the first empty batch — we wait until we've seen *some* records and then hit a quiet period.
 
+```{code-cell} python
+import time
+
+deadline = time.time() + 10
+got_any = False
+while time.time() < deadline:
+    batch = consumer.poll(timeout_ms=1000)
+    if batch:
+        got_any = True
+        for records in batch.values():
+            for r in records:
+                print(f"partition={r.partition} offset={r.offset} key={r.key} value={r.value}")
+        consumer.commit()   # mark "everything in this batch is processed"
+    elif got_any:
+        break               # we drained the topic
+```
+
+**Step 4 — clean up.** Kept in its own cell so Step 3 stays re-runnable.
+
+```{code-cell} python
 consumer.close()
+print("consumer closed")
 ```
 
 What's happening here:
@@ -142,7 +171,9 @@ Most analytical pipelines use `earliest` (don't want to silently drop history). 
 
 ### The poll loop
 
-The `for record in consumer:` form hides what's really happening. Underneath, the consumer is calling `poll()` repeatedly. Each `poll` returns a batch of records the broker has fetched and buffered locally. The consumer client also uses the poll cycle to send heartbeats to the broker -- if too long passes between polls, the broker thinks the consumer is dead and rebalances its partitions away.
+`poll(timeout_ms=...)` is the basic unit of consumer work. Each call returns a batch of records the broker has fetched and buffered locally, blocking up to `timeout_ms` if nothing is ready yet. The consumer client also uses the poll cycle to send heartbeats to the broker -- if too long passes between polls, the broker thinks the consumer is dead and rebalances its partitions away.
+
+(`kafka-python` also offers a `for record in consumer:` shorthand that calls `poll()` under the hood, but we'll use the explicit form throughout the course so the network round-trips are visible.)
 
 That detail matters: **slow processing inside the loop can get you kicked out of the group**. We'll come back to it.
 

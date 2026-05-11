@@ -13,21 +13,24 @@ We have events in Kafka. Now we want them on disk in a queryable format —
 parquet — so analysts can run batch queries over history. The naive approach
 is "spin up a job every minute and read whatever's new" (the spark-etl
 approach). We're going to do better: a *long-running streaming query* that
-reads continuously and writes incrementally, with a checkpoint so a restart
-resumes without re-processing or losing records.
+reads continuously and writes incrementally.
 
 This stage is one function — `build_stream` in `pipeline/ingest_job.py` —
-that you'll evolve across the two parts.
+that you'll evolve across the two parts. Part A builds the query and gets
+events flowing to parquet. Part B comes *after* the checkpoints theory
+lesson and verifies that the same query can be killed and restarted
+without duplicating or losing rows.
 
-## Design Considerations
+## Design Considerations (for Part A)
 
-- The query runs forever. Failure handling can't be "retry the job" — it
-  must be "the engine restarts and resumes from where it left off." What
-  has to be persistent for that to work?
+- The query runs forever. There's no "next tick" to retry on failure —
+  the engine itself has to come back up and resume. For now, just notice
+  that's the shape of the problem; we'll see how Spark solves it in
+  Theory 2.
 - `outputMode("append")` is fine for *un-aggregated* events. Why? When does
   it not work?
-- Spark commits the checkpoint *after* the sink confirms the write. Why is
-  that ordering essential to the recovery story?
+- The writer needs a `checkpointLocation`. Treat it as a required path
+  Spark needs — the next theory chapter unpacks what's actually in it.
 
 ## Part A — Read from Kafka, parse, write parquet (~30 min)
 
@@ -63,6 +66,10 @@ The test produces 20 events, starts your query, waits up to 90 seconds for
 
 ## Part B — Verify restart-from-checkpoint (~30 min)
 
+> You should have just finished the **Checkpoints and Fault Tolerance**
+> theory lesson. Part B is where that theory lands: we kill the query
+> mid-stream, restart it, and watch the checkpoint do its job.
+
 The test for Part B does something Part A's test doesn't: it stops the
 query, produces *more* events, restarts the query, and asserts that exactly
 the right number of rows ended up on disk — no duplicates from
@@ -71,12 +78,16 @@ re-processing the first batch, no losses.
 For this to pass, the same `build_stream` must:
 
 - Always pass `checkpointLocation` to the writer (you already did this in
-  Part A — but verify it's correct).
+  Part A — but verify it's correct). The checkpoint is what tells the
+  restarted query *where in Kafka it had reached*; without it, the second
+  run starts from `startingOffsets` again and double-writes everything.
 - Use a deterministic `output_path`. Spark's parquet sink uses an atomic
   rename per micro-batch, so output files from successive runs accumulate
   cleanly in the same directory.
 - Use `startingOffsets="earliest"` (the option is **ignored** when a
-  checkpoint exists — Spark uses the committed offsets instead).
+  checkpoint exists — Spark uses the committed offsets instead). This is
+  the concrete payoff of "commit after the sink confirms": on restart,
+  Spark trusts its own committed offsets, not the source's defaults.
 
 If your Part A passes but Part B fails with too many rows, your
 `startingOffsets` is being respected on the second run — check that

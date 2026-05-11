@@ -74,7 +74,6 @@ spark = (SparkSession.builder
     .master("local[2]")
     .config("spark.sql.shuffle.partitions", "2")
     .getOrCreate())
-spark.sparkContext.setLogLevel("WARN")
 
 stream = (spark.readStream
     .format("rate")
@@ -237,4 +236,4 @@ We'll fill out exactly what those 2 minutes mean next.
 
 ---
 
-[← Previous: Structured Streaming Basics](03-structured-streaming-basics.md) | [Next: Watermarks and Late Data →](05-watermarks-and-late-data.md)
+[← Previous: Checkpoints and Fault Tolerance](04-checkpoints-and-fault-tolerance.md) | [Next: Watermarks and Late Data →](06-watermarks-and-late-data.md)

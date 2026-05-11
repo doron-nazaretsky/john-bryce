@@ -133,7 +133,6 @@ spark = (SparkSession.builder
     .master("local[2]")
     .config("spark.sql.shuffle.partitions", "2")
     .getOrCreate())
-spark.sparkContext.setLogLevel("WARN")
 
 stream = (spark.readStream
     .format("rate")
@@ -227,4 +226,4 @@ query = top.writeStream.outputMode("update").format("console").start()
 
 ---
 
-[← Previous: Windowing](04-windowing.md) | [Next: Checkpoints and Fault Tolerance →](06-checkpoints-and-fault-tolerance.md)
+[← Previous: Windowing](05-windowing.md) | [Next: Streaming Exercises →](../04-exercises/01-streaming-exercises.md)

@@ -11,6 +11,14 @@ project:
     - python
     - docker
   github: https://github.com/john-bryce
+  # When thebe runs a {code-cell}, Jupyter starts the kernel with cwd set to
+  # the source MD's directory, so Spark creates `./artifacts/spark-<uuid>/`
+  # there (Spark 4.0 ArtifactManager). MyST's file watcher sees the new path,
+  # fires "Triggered full site rebuild", and the page reload kills the live
+  # kernel session — students see the cell silently lose its output. Exclude
+  # the artifacts subtrees so transient runtime files don't poke the watcher.
+  exclude:
+    - "**/artifacts/**"
   jupyter:
     server:
       url: http://localhost:8888/
@@ -266,9 +274,9 @@ project:
             - file: materials/streaming/03-streaming/01-realtime-vs-batch.md
             - file: materials/streaming/03-streaming/02-streaming-mental-model.md
             - file: materials/streaming/03-streaming/03-structured-streaming-basics.md
-            - file: materials/streaming/03-streaming/04-windowing.md
-            - file: materials/streaming/03-streaming/05-watermarks-and-late-data.md
-            - file: materials/streaming/03-streaming/06-checkpoints-and-fault-tolerance.md
+            - file: materials/streaming/03-streaming/04-checkpoints-and-fault-tolerance.md
+            - file: materials/streaming/03-streaming/05-windowing.md
+            - file: materials/streaming/03-streaming/06-watermarks-and-late-data.md
         - title: Exercises
           children:
             - file: materials/streaming/04-exercises/01-streaming-exercises.md

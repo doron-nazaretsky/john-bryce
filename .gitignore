@@ -229,3 +229,8 @@ __marimo__/
 .vscode
 .vscode
 .DS_Store
+# Spark's ArtifactManager (4.0+) creates ./artifacts/spark-<uuid>/ relative to
+# the kernel's cwd. With MyST/thebe, cwd is the lesson dir, so the dir lands
+# under materials/.../artifacts/. MyST's watcher already ignores it (myst.yml
+# project.exclude); keep it out of git too.
+materials/**/artifacts/spark-*/

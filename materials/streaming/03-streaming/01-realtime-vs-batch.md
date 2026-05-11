@@ -104,7 +104,7 @@ For the rest of this course "streaming" means the second-and-third points: laten
 Streaming is harder. Specifically:
 
 - **State must be managed.** A long-running query holds aggregates, joins, dedup tables in memory. You have to budget that memory and decide when state can be evicted.
-- **Late and out-of-order data is a fact, not an exception.** A record arriving 30 seconds late is normal. Your code has to handle it explicitly. (See [Watermarks](05-watermarks-and-late-data.md).)
+- **Late and out-of-order data is a fact, not an exception.** A record arriving 30 seconds late is normal. Your code has to handle it explicitly. (See [Watermarks](06-watermarks-and-late-data.md).)
 - **Failure recovery requires checkpoints.** A streaming query that's been running for a week has aggregated a week of state -- you can't afford to lose it. That state must be persisted somewhere.
 - **Operational complexity.** The cluster is *always running*. Resource sizing, deployment, observability, and on-call all become "running a 24/7 service" rather than "running a job."
 - **Backpressure matters.** If the consumer can't keep up with the producer, the broker absorbs it -- but if the gap keeps growing, you eventually fall over.

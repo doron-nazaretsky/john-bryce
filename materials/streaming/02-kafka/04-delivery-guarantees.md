@@ -115,10 +115,11 @@ This guarantees **at-most-once write per producer-partition** at the storage lev
 
 Cost: small CPU and metadata overhead, well worth it. **Turn it on.** It's now the default in Kafka.
 
-Here's a producer wired up for the strong-durability story (`acks=all` + idempotence) plus a manual-commit consumer that processes *then* commits — the at-least-once recipe end to end:
+Here's a producer wired up for the strong-durability story (`acks=all` + idempotence) plus a manual-commit consumer that processes *then* commits — the at-least-once recipe end to end.
+
+**Step 1 — create the topic.**
 
 ```{code-cell} python
-from kafka import KafkaProducer, KafkaConsumer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
 
@@ -130,8 +131,14 @@ try:
     admin.create_topics([NewTopic(name=TOPIC, num_partitions=1, replication_factor=3)])
 except TopicAlreadyExistsError:
     pass
+print(f"topic {TOPIC!r} ready")
+```
 
-# Strong-durability producer: every write waits for full ISR ack, idempotent on retries
+**Step 2 — strong-durability producer:** every write waits for full ISR ack and is idempotent on retries.
+
+```{code-cell} python
+from kafka import KafkaProducer
+
 producer = KafkaProducer(
     bootstrap_servers=BOOTSTRAP,
     acks="all",
@@ -139,25 +146,46 @@ producer = KafkaProducer(
     retries=5,
 )
 for i in range(5):
-    md = producer.send(TOPIC, key=f"order-{i}".encode(), value=f"amount={i*10}".encode()).get(timeout=10)
+    md = producer.send(TOPIC, key=f"order-{i}".encode(),
+                       value=f"amount={i*10}".encode()).get(timeout=10)
     print(f"acked: partition={md.partition} offset={md.offset}")
 producer.flush()
 producer.close()
+```
 
-# At-least-once consumer: process THEN commit
+**Step 3 — at-least-once consumer: process *then* commit.** Manual commit after each batch, explicit `poll()` so the network calls are visible.
+
+```{code-cell} python
+from kafka import KafkaConsumer
+import time
+
 consumer = KafkaConsumer(
     TOPIC, bootstrap_servers=BOOTSTRAP,
     group_id="demo-delivery-grp",
     auto_offset_reset="earliest",
     enable_auto_commit=False,
-    consumer_timeout_ms=8000,
 )
-for r in consumer:
-    print(f"processed key={r.key} value={r.value}")
-    consumer.commit()    # only after successful processing
+deadline = time.time() + 10
+got_any = False
+while time.time() < deadline:
+    batch = consumer.poll(timeout_ms=1000)
+    if batch:
+        got_any = True
+        for records in batch.values():
+            for r in records:
+                print(f"processed key={r.key} value={r.value}")
+        consumer.commit()    # only after successful processing
+    elif got_any:
+        break
+```
+
+**Step 4 — clean up.**
+
+```{code-cell} python
 consumer.close()
 admin.delete_topics([TOPIC])
 admin.close()
+print(f"closed consumer and deleted topic {TOPIC!r}")
 ```
 
 ---

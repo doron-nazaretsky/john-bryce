@@ -1,0 +1,29 @@
+# The workspace image only COPYs labs/*/pyproject.toml. Everything else in
+# the build context is dead weight that slows down every `up --build` because
+# the entire context is tar'd and sent to the Docker daemon. Materials, the
+# scaffold, build output, and VCS state are all bind-mounted at runtime
+# instead.
+
+.git
+.venv
+_build
+node_modules
+
+materials
+scaffolds
+artifacts
+data
+
+.claude
+.devcontainer
+.vscode
+
+.env
+.env.example
+
+**/__pycache__
+**/.ipynb_checkpoints
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.pyc

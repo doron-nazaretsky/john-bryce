@@ -1,20 +1,34 @@
-# Streaming lab: 3-broker Kafka cluster (KRaft) + workspace running Spark in local mode.
-# Merges with labs/base/compose.yml — the workspace service is layered on top
-# with kafka-python + pyspark from labs/streaming/pyproject.toml. The base image
-# ships OpenJDK 17, so workspace runs Spark inside its own JVM (local[*] mode) —
-# no separate Spark master/worker containers. The streaming module teaches stream
-# semantics (windows, watermarks, checkpoints), not Spark cluster ops.
+# Streaming lab: 3-broker Kafka cluster (KRaft) + dedicated `spark` sidecar
+# running Jupyter with Spark in local[*] mode. Merges with labs/base/compose.yml.
+#
+# Why split workspace and Spark:
+#   The base workspace container hosts the MyST docs server (Node) and, in older
+#   versions of this lab, also hosted the Spark driver + Jupyter kernel in the
+#   same process tree. That meant MyST's Node process and Spark's JVM competed
+#   for the same 3 GB mem_limit, and a heavy Spark query could starve docs or
+#   vice versa. We now isolate them: workspace = MyST only, spark = Jupyter +
+#   pyspark. Memory budgets are explicit and either side can crash without
+#   taking the other down. The student-facing UX is unchanged because MyST runs
+#   in the browser and connects to http://localhost:8888 (the spark container's
+#   published port) exactly as before.
 #
 # Architecture:
-#   workspace (from labs/base)         MyST docs (3000) + Jupyter (8888) + Spark driver/executor (local mode).
-#                                      Python 3.13, JRE 17, pyspark 4.0.0, kafka-python.
-#   kafka-1 / kafka-2 / kafka-3        3-node KRaft cluster (combined broker+controller).
+#   workspace            MyST docs server (3000). Repo mounted at /workspace.
+#                        No Jupyter, no JVM.
+#   spark                Jupyter server (8888) + Spark driver/executor (local[*]).
+#                        Same base image with LAB=streaming so pyspark +
+#                        kafka-python are installed. Spark UI on 4040 while a
+#                        query is running. Repo mounted at /workspace so the
+#                        kernel sees the same files as the workspace's MyST.
+#   kafka-1/2/3          3-node KRaft cluster (combined broker+controller).
+#   kafka-ui             Kafka cluster inspector (host port 18080).
 #
-# Sizing: tuned for 8 GB laptops.
-#   workspace:          ~3g (Spark local + kernel + MyST node process)
-#   kafka-1/2/3:        320m each   (~960m total)
-#   kafka-ui:           400m
-#   total guaranteed:   ~4.4g
+# Sizing (8 GB laptop):
+#   workspace:           ~700m  (MyST/Node only — no JVM)
+#   spark:               ~2700m (Spark JVM heap + driver + kernel)
+#   kafka-1/2/3:         320m each (~960m)
+#   kafka-ui:            400m
+#   total guaranteed:    ~4.8g
 #
 # Usage: make lab-streaming
 
@@ -23,11 +37,46 @@ services:
     build:
       args:
         LAB: streaming
+    # Override (not append) the inherited port list — Jupyter has moved to the
+    # `spark` sidecar, which now owns host port 8888. Compose's `!override` tag
+    # replaces the entire list from labs/base/compose.yml.
+    ports: !override
+      - "3000:3000"
+      - "3100:3100"
+    # Run MyST only. Jupyter is no longer started here.
+    command: ["bash", "labs/streaming/workspace-init.sh"]
+    mem_limit: 700m
+    depends_on:
+      spark:
+        condition: service_healthy
+
+  spark:
+    container_name: spark
+    hostname: spark
+    build:
+      context: ../..
+      dockerfile: labs/base/Dockerfile
+      args:
+        LAB: streaming
+    volumes:
+      - ../..:/workspace
+    working_dir: /workspace
     environment:
+      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-local-dev}
       - KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
       - PYSPARK_PYTHON=python3
       - PYSPARK_DRIVER_PYTHON=python3
-    mem_limit: 3g
+    command: ["bash", "labs/streaming/spark-init.sh"]
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+    mem_limit: 2700m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8888/api/status -H 'Authorization: token local-dev' >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
     depends_on:
       kafka-1:
         condition: service_healthy
@@ -35,6 +84,7 @@ services:
         condition: service_healthy
       kafka-3:
         condition: service_healthy
+    restart: unless-stopped
 
   kafka-1:
     image: bitnamilegacy/kafka:3.7.0

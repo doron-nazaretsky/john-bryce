@@ -33,7 +33,7 @@ This module references concepts from the **[Core Concepts library](../core-conce
 |--------|---------|----------|
 | **01 - Introduction** | [From Messaging to Streaming](01-introduction/01-from-messaging-to-streaming.md), [Where This Shows Up](01-introduction/02-where-this-shows-up.md) | ~30 min |
 | **02 - Kafka** | [Broker/Topic/Partition Model](02-kafka/01-broker-topic-partition-model.md), [Producers and Consumers](02-kafka/02-producers-and-consumers.md), [Consumer Groups & Rebalancing](02-kafka/03-consumer-groups-and-rebalancing.md), [Delivery Guarantees](02-kafka/04-delivery-guarantees.md), [Replication & ISR](02-kafka/05-replication-and-isr.md), [Multi-Node Deployment](02-kafka/06-multi-node-deployment.md), [Advanced Features Overview](02-kafka/07-advanced-features-overview.md) | ~3.5 hours |
-| **03 - Streaming Processing** | [Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md), [Streaming Mental Model](03-streaming/02-streaming-mental-model.md), [Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md), [Windowing](03-streaming/04-windowing.md), [Watermarks & Late Data](03-streaming/05-watermarks-and-late-data.md), [Checkpoints & Fault Tolerance](03-streaming/06-checkpoints-and-fault-tolerance.md) | ~4 hours |
+| **03 - Streaming Processing** | [Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md), [Streaming Mental Model](03-streaming/02-streaming-mental-model.md), [Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md), [Checkpoints & Fault Tolerance](03-streaming/04-checkpoints-and-fault-tolerance.md), [Windowing](03-streaming/05-windowing.md), [Watermarks & Late Data](03-streaming/06-watermarks-and-late-data.md) | ~4 hours |
 | **04 - Exercises** | [Streaming Exercises](04-exercises/01-streaming-exercises.md) | ~30 min |
 
 **Total: 12 hours** (split across three sessions).
@@ -51,23 +51,27 @@ Each session follows the same rhythm: **2h theory → 0.5h exercise → 1h theor
 | **Theory 2 (1h)** | [01-Intro/Where This Shows Up](01-introduction/02-where-this-shows-up.md) (patterns recap) → [02-Kafka/Consumer Groups & Rebalancing](02-kafka/03-consumer-groups-and-rebalancing.md) (light treatment — fan-out/load-distribution; no commit semantics yet) |
 | **Hands-on B (0.5h)** | **Stage 1 Part B** — consume with a `group_id`, return N events |
 
-### S2 (4h) — Failure, durability, and Spark on Kafka
+### S2 (4h) — Durability story: from Kafka acks to Spark checkpoints
+
+The arc here is one coherent narrative — *"commit after the sink confirms"* — told from both ends. We finish the Kafka durability story first (closing the loop opened by Stage 1's auto-commit), then pivot once into Spark and stay there.
 
 | Block | Content |
 |---|---|
-| **Theory 1 (2h)** | [03-Streaming/Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md) → [03-Streaming/Streaming Mental Model](03-streaming/02-streaming-mental-model.md) → [03-Streaming/Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md) → [02-Kafka/Delivery Guarantees](02-kafka/04-delivery-guarantees.md) (now with the "remember Stage 1's auto-commit?" payoff) |
-| **Hands-on A (0.5h)** | **Stage 2 Part A** — Spark `readStream` from Kafka, console sink |
-| **Theory 2 (1h)** | [03-Streaming/Checkpoints & Fault Tolerance](03-streaming/06-checkpoints-and-fault-tolerance.md) → [02-Kafka/Replication & ISR](02-kafka/05-replication-and-isr.md) (framed as "what `acks=all` actually buys you") |
-| **Hands-on B (0.5h)** | **Stage 2 Part B** — parquet sink + checkpoint |
+| **Theory 1 (2h)** | **Kafka durability (~45 min, taught as one unit):** [02-Kafka/Delivery Guarantees](02-kafka/04-delivery-guarantees.md) (the "remember Stage 1's auto-commit?" payoff — skim the Kafka-transactions deep-dive; it's not load-bearing) → [02-Kafka/Replication & ISR](02-kafka/05-replication-and-isr.md) (what `acks=all` actually buys you). **Spark intro (~75 min):** [03-Streaming/Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md) → [03-Streaming/Streaming Mental Model](03-streaming/02-streaming-mental-model.md) → [03-Streaming/Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md) (bulk of time goes here — it's the chapter Part A depends on). |
+| **Hands-on A (0.5h)** | **Stage 2 Part A** — Spark `readStream` from Kafka, parse JSON, parquet sink |
+| **Theory 2 (1h)** | [03-Streaming/Checkpoints & Fault Tolerance](03-streaming/04-checkpoints-and-fault-tolerance.md) — closes the durability arc: Kafka commits offsets, Spark commits the checkpoint, both *after* the sink confirms |
+| **Hands-on B (0.5h)** | **Stage 2 Part B** — verify restart-from-checkpoint (no duplicates, no losses) |
 
 ### S3 (4h) — Windowed analytics over time
 
 | Block | Content |
 |---|---|
-| **Theory 1 (2h)** | [02-Kafka/Multi-Node Deployment](02-kafka/06-multi-node-deployment.md) → [02-Kafka/Advanced Features Overview](02-kafka/07-advanced-features-overview.md) → [03-Streaming/Windowing](03-streaming/04-windowing.md) — the two Kafka chapters are intentional buffer / Q&A; windowing is the actual prereq for the hands-on |
+| **Theory 1 (2h)** | [03-Streaming/Windowing](03-streaming/05-windowing.md) — full 2h on event-time, tumbling vs sliding, window state; the actual prereq for the hands-on |
 | **Hands-on A (0.5h)** | **Stage 3 Part A** — tumbling windowed count |
-| **Theory 2 (1h)** | [03-Streaming/Watermarks & Late Data](03-streaming/05-watermarks-and-late-data.md) — slack again left as buffer (this is the conceptually hardest material) |
+| **Theory 2 (1h)** | [03-Streaming/Watermarks & Late Data](03-streaming/06-watermarks-and-late-data.md) — the conceptually hardest material; gets the full hour |
 | **Hands-on B (0.5h)** | **Stage 3 Part B** — window + watermark + late-data handling |
+
+The [02-Kafka/Multi-Node Deployment](02-kafka/06-multi-node-deployment.md) and [02-Kafka/Advanced Features Overview](02-kafka/07-advanced-features-overview.md) chapters are **optional reference material** — pull them in as Q&A buffer if a session finishes early, or point students at them as self-study. They are not on the critical path.
 
 The [04 - Exercises](04-exercises/01-streaming-exercises.md) are optional, intended for after Stage 3.
 

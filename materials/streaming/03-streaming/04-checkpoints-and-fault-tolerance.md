@@ -43,7 +43,6 @@ spark = (SparkSession.builder
     .master("local[2]")
     .config("spark.sql.shuffle.partitions", "2")
     .getOrCreate())
-spark.sparkContext.setLogLevel("WARN")
 
 ckpt = f"/tmp/streaming-ckpt-{uuid.uuid4().hex[:8]}"
 shutil.rmtree(ckpt, ignore_errors=True)
@@ -117,14 +116,35 @@ def write_to_postgres(batch_df, batch_id):
 
 ---
 
-## The State Store
+## What Matters Most Here: Source Offsets (and Two Guarantees Around Them)
+
+For our Stage 2 query — a stateless ingest from Kafka to parquet — the "no duplicates, no losses on restart" property rests on three things working together. Only one of them is something you configure; the other two are guarantees Spark and the parquet sink give you for free. It's worth knowing all three, because if any one of them broke, the property would break with it.
+
+**1. Source offsets in the checkpoint *(the part you configure)*.**
+The checkpoint records, per Kafka `(topic, partition)`, the last offset Spark has fully processed. On restart, Spark reads that offset and tells the Kafka source: "resume from here." This is what `startingOffsets="earliest"` being *ignored on the second run* actually means — Spark uses the committed offset instead of the source's default. **This is the piece your `checkpointLocation` option turns on.** Without it, a restart re-reads from `earliest` and double-writes every record.
+
+**2. Commit ordering: offsets are written *after* the sink confirms the write *(Spark's guarantee)*.**
+Within each micro-batch, Spark writes to parquet first, waits for the rename to succeed, *then* advances the offsets in the checkpoint. So if the driver crashes mid-batch, one of two things is true: either the parquet write completed and the offset was advanced (clean), or the parquet write didn't complete and the offset wasn't advanced (so the next run reprocesses that batch — which is safe *because of #3*).
+
+**3. Atomic rename in the parquet sink *(the sink's guarantee)*.**
+A micro-batch is either fully visible in the output directory or not at all. There's no half-written file partially showing rows. So when #2 says "re-run the batch on restart," that re-run can't observe garbage left behind by the failed attempt.
+
+Strip out any one of these and the property breaks: no offsets and you re-read from the start; wrong commit order and you'd commit offsets for data that never made it to the sink (losses); non-atomic sink and a crashed batch leaves visible duplicates. Together they give you exactly-once *visible output* on top of at-least-once processing.
+
+Everything else in the checkpoint (query metadata, state stores, etc.) is bookkeeping or only matters for stateful operators — which we're about to meet.
+
+---
+
+## The State Store (Teaser)
+
+> The rest of this section is a forward-look at things you haven't met yet -- **windowing** and **watermarks** are the next two chapters. You don't need this for Stage 2; come back to it once you've worked through Stage 3.
 
 For stateful operators, the engine uses a **state store** -- by default, a key-value store backed by RocksDB (since Spark 3.2) or by HDFS (older default). It lives next to the checkpoint.
 
 The state store remembers things like:
 
-- Open windowed aggregates: `(window_start, page) → count`
-- Watermark high-water mark
+- Open windowed aggregates: `(window_start, page) → count` *(see [Windowing](05-windowing.md))*
+- Watermark high-water mark *(see [Watermarks and Late Data](06-watermarks-and-late-data.md))*
 - Dedup tables (for `dropDuplicates`)
 - Stream-stream join state
 
@@ -207,4 +227,4 @@ In the project, every link holds: idempotent producer (default), Spark with chec
 
 ---
 
-[← Previous: Watermarks and Late Data](05-watermarks-and-late-data.md) | [Next: Streaming Exercises →](../04-exercises/01-streaming-exercises.md)
+[← Previous: Structured Streaming Basics](03-structured-streaming-basics.md) | [Next: Windowing →](05-windowing.md)

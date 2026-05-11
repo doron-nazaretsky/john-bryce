@@ -117,11 +117,12 @@ producer.send("pageviews", value=b"...")                  # round-robin / sticky
 
 We can observe this directly: send several keyed records and several keyless ones, then read them back and look at which partition they landed on.
 
+**Step 1 — produce a mix of keyed and keyless records.**
+
 ```{code-cell} python
 from kafka import KafkaProducer, KafkaConsumer
-from kafka.admin import KafkaAdminClient
+from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
-from kafka.admin import NewTopic
 
 BOOTSTRAP = "kafka-1:9092,kafka-2:9092,kafka-3:9092"
 TOPIC = "demo-broker-model"
@@ -133,27 +134,46 @@ except TopicAlreadyExistsError:
     pass
 
 producer = KafkaProducer(bootstrap_servers=BOOTSTRAP)
-# Same key -> always same partition
-for _ in range(3):
+for _ in range(3):                                          # same key -> same partition
     producer.send(TOPIC, key=b"user-42", value=b"keyed-A")
-# Different keys -> hashed across partitions
-for k in [b"user-1", b"user-2", b"user-3", b"user-4", b"user-5"]:
+for k in [b"user-1", b"user-2", b"user-3", b"user-4", b"user-5"]:  # hashed across partitions
     producer.send(TOPIC, key=k, value=b"keyed-other")
-# No key -> spread by sticky/round-robin
-for _ in range(5):
+for _ in range(5):                                          # no key -> sticky/round-robin
     producer.send(TOPIC, value=b"no-key")
 producer.flush()
+producer.close()
+print("produced 13 records")
+```
+
+**Step 2 — read them back and inspect which partition each landed on.** We use an explicit `poll()` loop rather than `for r in consumer:` so it's clear *when* we're talking to Kafka.
+
+```{code-cell} python
+import time
 
 consumer = KafkaConsumer(TOPIC, bootstrap_servers=BOOTSTRAP,
                          auto_offset_reset="earliest",
-                         consumer_timeout_ms=3000,
+                         enable_auto_commit=False,
                          group_id=None)
-for r in consumer:
-    print(f"partition={r.partition}  key={r.key}  value={r.value}")
+deadline = time.time() + 10
+got_any = False
+while time.time() < deadline:
+    batch = consumer.poll(timeout_ms=1000)
+    if batch:
+        got_any = True
+        for records in batch.values():
+            for r in records:
+                print(f"partition={r.partition}  key={r.key}  value={r.value}")
+    elif got_any:
+        break
+```
+
+**Step 3 — clean up.**
+
+```{code-cell} python
 consumer.close()
-producer.close()
 admin.delete_topics([TOPIC])
 admin.close()
+print(f"closed consumer and deleted topic {TOPIC!r}")
 ```
 
 The choice of key is a **design decision with consequences**:
