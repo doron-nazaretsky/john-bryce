@@ -29,15 +29,16 @@ GROUP BY w, page
 
 Now the result is `(window, page) → count`. Each row scopes its count to one minute of event time. The result still grows over time -- one row per (page, minute) -- but the grouping is bounded per minute.
 
-In Spark Structured Streaming:
+In Spark Structured Streaming (SQL form, assuming `events` is registered as a temp view):
 
 ```python
-from pyspark.sql.functions import window, col
+events.createOrReplaceTempView("events")
 
-windowed = events.groupBy(
-    window(col("ts"), "1 minute"),
-    col("page"),
-).count()
+windowed = spark.sql("""
+    SELECT window(ts, '1 minute') AS w, page, count(*) AS views
+    FROM events
+    GROUP BY window(ts, '1 minute'), page
+""")
 ```
 
 `window` is a function that, given a timestamp column, returns a struct `{start, end}`. Group by it (along with whatever business keys you care about) and you have a windowed aggregation.
@@ -67,7 +68,6 @@ Let's run a 5-second tumbling window over a `rate` stream. We use `rate` (rather
 ```{code-cell} python
 import time
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import window, col
 
 spark = (SparkSession.builder
     .appName("windowing-demo")
@@ -80,8 +80,15 @@ stream = (spark.readStream
     .option("rowsPerSecond", 5)
     .load())
 
-# 5-second tumbling windows, count rows per window
-windowed = stream.groupBy(window(col("timestamp"), "5 seconds")).count()
+# Register the streaming DataFrame as a temp view so we can query it with SQL.
+stream.createOrReplaceTempView("rate_stream")
+
+# 5-second tumbling windows, count rows per window — expressed in Spark SQL.
+windowed = spark.sql("""
+    SELECT window(timestamp, '5 seconds') AS window, count(*) AS count
+    FROM rate_stream
+    GROUP BY window(timestamp, '5 seconds')
+""")
 
 query = (windowed.writeStream
     .format("memory")
@@ -114,15 +121,16 @@ windows:  |---- W0 ----|
 You specify both *size* and *slide* (how much each new window advances). With size=1m and slide=15s, you get a new window every 15 seconds, each spanning the most recent 1 minute. Each event belongs to multiple windows.
 
 ```python
-windowed = events.groupBy(
-    window(col("ts"), "1 minute", "15 seconds"),
-    col("page"),
-).count()
+windowed = spark.sql("""
+    SELECT window(ts, '1 minute', '15 seconds') AS w, page, count(*) AS views
+    FROM events
+    GROUP BY window(ts, '1 minute', '15 seconds'), page
+""")
 ```
 
 **Use cases:** rolling moving averages, "errors in the last 5 minutes" updated every 30 seconds, smooth dashboards where you don't want a discontinuity at every minute boundary.
 
-**Cost:** more state. With size/slide ratio = 4, the engine is maintaining 4x the windows simultaneously. Slide values close to size are expensive. Slide=size makes a sliding window equivalent to a tumbling one.
+**Cost:** more state. Each event belongs to `ceil(size / slide)` windows, so the engine carries that many open windows at any moment. With `size=1m, slide=15s` (ratio 4), every event is in 4 windows. With `size=1m, slide=1s` (ratio 60), every event is in 60. Slide values *much smaller* than size are the expensive end; slide values *close to* size are the cheap end, and `slide = size` reduces to tumbling (ratio 1).
 
 ---
 
@@ -139,12 +147,11 @@ sessions: |--- S1 ---|       |--- S2 ---|     |- S3 -|
 ```
 
 ```python
-from pyspark.sql.functions import session_window, col
-
-sessions = events.groupBy(
-    session_window(col("ts"), "5 minutes"),    # 5-min inactivity gap
-    col("user_id"),
-).count()
+sessions = spark.sql("""
+    SELECT session_window(ts, '5 minutes') AS s, user_id, count(*) AS events
+    FROM events
+    GROUP BY session_window(ts, '5 minutes'), user_id
+""")
 ```
 
 Each session is one user's burst of activity, bounded by 5 minutes of silence on either side. Sessions are *per group key* -- each user has their own concurrent sessions.
@@ -207,33 +214,8 @@ Without a watermark, append mode for a windowed aggregation is *forbidden* -- Sp
 
 ---
 
-## A Practical Stage-3 Sketch
-
-For the project's Stage 3, the goal is "pageviews per page per minute, emitted as 1-minute windows close." That's:
-
-```python
-windowed = events \
-    .withWatermark("ts", "2 minutes") \
-    .groupBy(window(col("ts"), "1 minute"), col("page")) \
-    .count()
-
-query = windowed.writeStream \
-    .format("parquet") \
-    .option("path", "/output/windowed") \
-    .option("checkpointLocation", "/checkpoints/windowed") \
-    .outputMode("append") \
-    .trigger(processingTime="10 seconds") \
-    .start()
-```
-
-`withWatermark("ts", "2 minutes")` is what makes append-mode windowed aggregation legal. Once the highest event time seen is `T`, the engine considers `T - 2 minutes` to be the watermark; any window ending before that is finalized.
-
-We'll fill out exactly what those 2 minutes mean next.
+> **Hands-on now — Stage 3 Part A.** Switch to `streaming-clickstream/stages/03-windowed-counts/lesson.md` and complete **Part A**. Come back here once Part A's acceptance test is green.
 
 ---
 
-> **Hands-on now — Stage 3 Part A.** Switch to `streaming-clickstream/stages/03-windowed-counts/lesson.md` and complete **Part A (tumbling windowed count)**. Come back here once Part A's acceptance test is green.
-
----
-
-[← Previous: Checkpoints and Fault Tolerance](04-checkpoints-and-fault-tolerance.md) | [Next: Watermarks and Late Data →](06-watermarks-and-late-data.md)
+[← Previous: Checkpoints and Fault Tolerance](04-checkpoints-and-fault-tolerance.md) | [Next: Watermarks →](06-watermarks.md)

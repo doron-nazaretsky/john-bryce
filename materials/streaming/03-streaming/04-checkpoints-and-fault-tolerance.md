@@ -32,6 +32,15 @@ query = events.writeStream \
 
 If `checkpointLocation` is missing, Spark refuses to start a stateful query and warns even on stateless ones. **Always set it.**
 
+### When does Spark checkpoint?
+
+Checkpointing is automatic and tied to the micro-batch lifecycle — you don't trigger it manually:
+
+- **Offsets and commit metadata:** written every micro-batch. Offsets are persisted to `offsets/<batchId>` *before* the batch runs (so Spark knows what it's about to process), and a marker is written to `commits/<batchId>` *after* the sink confirms the write.
+- **State store snapshots:** for stateful queries, deltas are written every batch, and a full snapshot is taken periodically (default: every 10 batches, controlled by `spark.sql.streaming.stateStore.minDeltasForSnapshot`). Snapshots speed up restart; deltas keep recovery correct between them.
+
+There's no time-based interval — cadence is driven entirely by batch boundaries, which in turn depend on your trigger (default: as fast as possible; or `trigger(processingTime="10 seconds")`, etc.).
+
 Here's a tiny streaming query with an explicit checkpoint location. After it runs, we can inspect the checkpoint directory on disk and see Spark's bookkeeping (offsets, commits, metadata) take shape.
 
 ```{code-cell} python
@@ -144,7 +153,7 @@ For stateful operators, the engine uses a **state store** -- by default, a key-v
 The state store remembers things like:
 
 - Open windowed aggregates: `(window_start, page) → count` *(see [Windowing](05-windowing.md))*
-- Watermark high-water mark *(see [Watermarks and Late Data](06-watermarks-and-late-data.md))*
+- Watermark high-water mark *(see [Watermarks](06-watermarks.md))*
 - Dedup tables (for `dropDuplicates`)
 - Stream-stream join state
 

@@ -33,7 +33,7 @@ This module references concepts from the **[Core Concepts library](../core-conce
 |--------|---------|----------|
 | **01 - Introduction** | [From Messaging to Streaming](01-introduction/01-from-messaging-to-streaming.md), [Where This Shows Up](01-introduction/02-where-this-shows-up.md) | ~30 min |
 | **02 - Kafka** | [Broker/Topic/Partition Model](02-kafka/01-broker-topic-partition-model.md), [Producers and Consumers](02-kafka/02-producers-and-consumers.md), [Consumer Groups & Rebalancing](02-kafka/03-consumer-groups-and-rebalancing.md), [Delivery Guarantees](02-kafka/04-delivery-guarantees.md), [Replication & ISR](02-kafka/05-replication-and-isr.md), [Multi-Node Deployment](02-kafka/06-multi-node-deployment.md), [Advanced Features Overview](02-kafka/07-advanced-features-overview.md) | ~3.5 hours |
-| **03 - Streaming Processing** | [Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md), [Streaming Mental Model](03-streaming/02-streaming-mental-model.md), [Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md), [Checkpoints & Fault Tolerance](03-streaming/04-checkpoints-and-fault-tolerance.md), [Windowing](03-streaming/05-windowing.md), [Watermarks & Late Data](03-streaming/06-watermarks-and-late-data.md) | ~4 hours |
+| **03 - Streaming Processing** | [Real-Time vs Batch](03-streaming/01-realtime-vs-batch.md), [Streaming Mental Model](03-streaming/02-streaming-mental-model.md), [Structured Streaming Basics](03-streaming/03-structured-streaming-basics.md), [Checkpoints & Fault Tolerance](03-streaming/04-checkpoints-and-fault-tolerance.md), [Windowing](03-streaming/05-windowing.md), [Watermarks](03-streaming/06-watermarks.md), [Latency & Late Data](03-streaming/07-latency-and-late-data.md) | ~4 hours |
 | **04 - Exercises** | [Streaming Exercises](04-exercises/01-streaming-exercises.md) | ~30 min |
 
 **Total: 12 hours** (split across three sessions).
@@ -68,7 +68,7 @@ The arc here is one coherent narrative — *"commit after the sink confirms"* �
 |---|---|
 | **Theory 1 (2h)** | [03-Streaming/Windowing](03-streaming/05-windowing.md) — full 2h on event-time, tumbling vs sliding, window state; the actual prereq for the hands-on |
 | **Hands-on A (0.5h)** | **Stage 3 Part A** — tumbling windowed count |
-| **Theory 2 (1h)** | [03-Streaming/Watermarks & Late Data](03-streaming/06-watermarks-and-late-data.md) — the conceptually hardest material; gets the full hour |
+| **Theory 2 (1h)** | [03-Streaming/Watermarks](03-streaming/06-watermarks.md) + [Latency & Late Data](03-streaming/07-latency-and-late-data.md) — the conceptually hardest material; gets the full hour |
 | **Hands-on B (0.5h)** | **Stage 3 Part B** — window + watermark + late-data handling |
 
 The [02-Kafka/Multi-Node Deployment](02-kafka/06-multi-node-deployment.md) and [02-Kafka/Advanced Features Overview](02-kafka/07-advanced-features-overview.md) chapters are **optional reference material** — pull them in as Q&A buffer if a session finishes early, or point students at them as self-study. They are not on the critical path.

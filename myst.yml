@@ -276,7 +276,8 @@ project:
             - file: materials/streaming/03-streaming/03-structured-streaming-basics.md
             - file: materials/streaming/03-streaming/04-checkpoints-and-fault-tolerance.md
             - file: materials/streaming/03-streaming/05-windowing.md
-            - file: materials/streaming/03-streaming/06-watermarks-and-late-data.md
+            - file: materials/streaming/03-streaming/06-watermarks.md
+            - file: materials/streaming/03-streaming/07-latency-and-late-data.md
         - title: Exercises
           children:
             - file: materials/streaming/04-exercises/01-streaming-exercises.md
