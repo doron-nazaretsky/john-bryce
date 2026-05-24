@@ -15,7 +15,7 @@
 .PHONY: docs lab-preflight lab-orm lab-sql lab-nosql lab-replica-set lab-sharded lab-distributed lab-web \
         lab-redis lab-redis-sentinel lab-redis-cluster \
         lab-neo4j lab-neo4j-cluster \
-        lab-streaming \
+        lab-streaming lab-monitoring \
         new-project test-scaffolds \
         down reset shell convert \
         replica-set-init sharded-init sql-restore redis-cluster-init neo4j-cluster-init \
@@ -41,6 +41,7 @@ help:
 	@echo "  make lab-neo4j            Start workspace + single Neo4j (Graph lessons 01-06)"
 	@echo "  make lab-neo4j-cluster    Start workspace + 3-node Neo4j causal cluster (Graph lesson 07)"
 	@echo "  make lab-streaming        Start 3-broker Kafka (KRaft) + Spark cluster (Streaming lessons)"
+	@echo "  make lab-monitoring       Start full observability stack + Spark cluster + Kafka + Postgres (Monitoring lesson)"
 	@echo ""
 	@echo "  make new-project          Scaffold a capstone project into a new directory (pass ARGS=... for flags)"
 	@echo "  make test-scaffolds       Verify scaffolds fail correctly, then pass once solutions are overlaid"
@@ -147,6 +148,18 @@ lab-streaming: lab-preflight
 	@echo "Kafka brokers (host):       localhost:19092, localhost:19093, localhost:19094"
 	@echo "Spark UI:                   http://localhost:4040  (while a query is running)"
 	@echo "Kafka UI (Kafbat):          http://localhost:18080  (topics, partitions, consumer-group lag)"
+
+lab-monitoring: lab-preflight
+	docker compose $(BASE) -f labs/monitoring/compose.yml up -d --build --remove-orphans
+	@echo "MyST docs (workspace):      http://localhost:3000"
+	@echo "JupyterLab (workspace):     http://localhost:8888"
+	@echo "Grafana:                    http://localhost:3001  (admin / admin)"
+	@echo "Prometheus:                 http://localhost:9090"
+	@echo "Spark master UI:            http://localhost:8080"
+	@echo "Spark worker UIs:           http://localhost:8081, http://localhost:8082"
+	@echo "Postgres (host):            localhost:5432  (user app / password app / db clicks)"
+	@echo "Kafka brokers (in-cluster): kafka-1:9092, kafka-2:9092"
+	@echo "Kafka brokers (host):       localhost:19092, localhost:19093"
 
 # ─── Project scaffolds ──────────────────────────────────────────────────────
 

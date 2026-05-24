@@ -1,0 +1,508 @@
+# Monitoring & observability lab.
+#
+# Topology (12 containers — see plan: snappy-bubbling-garden.md):
+#   workspace                MyST docs (3000) + Jupyter (8888) + producer/spark CLIs + batch loop
+#   jars-init                One-shot: downloads OTel java agent + spot SparkListener jar
+#                            into the otel-jars volume on first up. Exits ~3s.
+#   otel-collector           Central collector (contrib distribution — JMX, postgres, filelog
+#                            receivers live in contrib, not core). Single pipeline per signal.
+#   prometheus               Metrics TSDB (scrapes the collector's exposition endpoint).
+#   loki                     Logs store (single-binary, filesystem backend).
+#   tempo                    Traces store (single-binary, filesystem backend).
+#   grafana                  Viz; datasources + dashboards + cross-signal correlation
+#                            (Tempo↔Loki) all provisioned at startup.
+#   spark-master             Spark 3.5 cluster manager. spot SparkListener jar + OTel java
+#                            agent mounted in via the otel-jars volume.
+#   spark-worker-1, -2       Two workers — so killing one (Scenario C) still leaves a working
+#                            cluster, demonstrating resilience, not failure.
+#   kafka-1, kafka-2         2-broker KRaft cluster (no ZooKeeper). Topic replication factor=2,
+#                            min.insync.replicas=1.
+#   postgres                 Sink for the aggregated_clicks upsert.
+#
+# Spark version pinned to 3.5: the com.xebia.data.spot TelemetrySparkListener supports
+# only Spark 3.3–3.5. This is monitoring-lab-local; the streaming lab uses Spark 4.0
+# independently. See labs/monitoring/README.md for the full caveat.
+#
+# Usage: make lab-monitoring
+
+services:
+  # ─── Workspace override ───────────────────────────────────────────────────
+  workspace:
+    build:
+      args:
+        LAB: monitoring
+    # Workspace keeps the standard base ports (3000 MyST, 3100 MyST admin,
+    # 8888 Jupyter). No !override needed — base list is what we want.
+    command: ["bash", "labs/monitoring/workspace-init.sh"]
+    volumes:
+      # Share the etl-logs volume with spark-master so `spark batch status`
+      # on the workspace can read the daemon's status + pidfile directly.
+      - etl-logs:/var/log/etl
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=clicks
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - OTEL_COLLECTOR_GRPC=otel-collector:4317
+      - OTEL_COLLECTOR_HTTP=http://otel-collector:4318
+      - PRODUCER_CONTROL_FILE=/tmp/producer-control.json
+    mem_limit: 700m
+    cpus: 2.0
+    depends_on:
+      grafana:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started   # distroless image, no healthcheck
+      spark-master:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+
+  # ─── One-shot jar preparer ────────────────────────────────────────────────
+  # Two responsibilities, both completing into the otel-jars named volume:
+  #
+  #   1. Download the OpenTelemetry Java agent (pre-built release on GitHub).
+  #   2. Build the com.xebia.data.spot SparkListener from source — spot has
+  #      no Maven Central release (verified May 2026), so we sbt-assembly it
+  #      ourselves from a pinned git SHA. spot uses sbt-projectmatrix to cross-
+  #      build for {Spark 3.3, 3.4, 3.5} × {Scala 2.12, 2.13}; we target
+  #      Spark 3.5 + Scala 2.12 to match the bitnamilegacy/spark:3.5 image.
+  #
+  # Spark services declare `depends_on: jars-init: service_completed_successfully`
+  # so they only boot once both jars are in place. The sbt + ivy2 + coursier
+  # caches are persisted in dedicated volumes so the first build is the only
+  # slow one (~5–8 min on a cold cache; <30s thereafter).
+  #
+  # Pin both versions here so behavior is reproducible across student machines.
+  jars-init:
+    image: sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.12.11_2.12.21
+    container_name: jars-init
+    user: "0:0"
+    volumes:
+      - otel-jars:/jars
+      - sbt-cache:/root/.sbt
+      - ivy-cache:/root/.ivy2
+      - coursier-cache:/root/.cache/coursier
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -eu
+        OTEL_AGENT_VERSION="2.10.0"
+        SPOT_REPO="https://github.com/godatadriven/spot.git"
+        SPOT_SHA="af8b64842f8a908208d491dfcc9536901c396767"
+
+        cd /jars
+
+        if [ ! -f opentelemetry-javaagent.jar ]; then
+          echo "[jars-init] downloading opentelemetry-javaagent $$OTEL_AGENT_VERSION"
+          curl -fsSL -o opentelemetry-javaagent.jar \
+            "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v$$OTEL_AGENT_VERSION/opentelemetry-javaagent.jar"
+        else
+          echo "[jars-init] opentelemetry-javaagent.jar already present, skipping download"
+        fi
+
+        if [ ! -f spot-complete.jar ]; then
+          echo "[jars-init] building spot @ $$SPOT_SHA (Spark 3.5 / Scala 2.12)"
+          rm -rf /tmp/spot
+          git clone "$$SPOT_REPO" /tmp/spot
+          cd /tmp/spot
+          git checkout "$$SPOT_SHA"
+          # spot uses sbt-projectmatrix to cross-build for {3.3, 3.4, 3.5} ×
+          # {2.12, 2.13}. The project IDs (verified May 2026 via `sbt projects`)
+          # follow `spot-complete-<spark>[<scala>]`, where Scala 2.13 is the
+          # default and gets no suffix while 2.12 gets the suffix appended:
+          #   spot-complete-3_5     -> Spark 3.5, Scala 2.13
+          #   spot-complete-3_52_12 -> Spark 3.5, Scala 2.12  ← we want this
+          sbt -batch 'spot-complete-3_52_12 / assembly'
+          JAR_PATH="$$(find spot-complete/target -name 'spot-complete-3.5_2.12-*.jar' | head -1)"
+          if [ -z "$$JAR_PATH" ]; then
+            echo "[jars-init] ERROR: assembly produced no jar"
+            find spot-complete/target -name '*.jar' || true
+            exit 1
+          fi
+          cp "$$JAR_PATH" /jars/spot-complete.jar
+          echo "[jars-init] spot-complete.jar built from $$JAR_PATH"
+        else
+          echo "[jars-init] spot-complete.jar already present, skipping build"
+        fi
+
+        ls -la /jars
+        echo "[jars-init] done"
+    restart: "no"
+
+  # ─── Kafka — 2-broker KRaft ───────────────────────────────────────────────
+  # Pattern copied from labs/streaming/compose.yml lines 89–124, scaled down
+  # from 3 → 2 brokers. Replication factor 2, min.insync.replicas 1 (one node
+  # may fail and the cluster still accepts writes).
+  kafka-1:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: kafka-1
+    hostname: kafka-1
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:19092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-1:9092,EXTERNAL://localhost:19092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=2
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
+      - KAFKA_CFG_NUM_PARTITIONS=4
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_KRAFT_CLUSTER_ID=monitoring-lab-cluster
+      # JMX for OTel collector's jmx receiver (Kafka broker metrics).
+      - KAFKA_JMX_PORT=9999
+      - KAFKA_JMX_HOSTNAME=kafka-1
+      - KAFKA_HEAP_OPTS=-Xms256m -Xmx256m
+    ports:
+      - "19092:19092"
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  kafka-2:
+    image: bitnamilegacy/kafka:3.7.0
+    container_name: kafka-2
+    hostname: kafka-2
+    environment:
+      - KAFKA_CFG_NODE_ID=2
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:19093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka-2:9092,EXTERNAL://localhost:19093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_DEFAULT_REPLICATION_FACTOR=2
+      - KAFKA_CFG_MIN_INSYNC_REPLICAS=1
+      - KAFKA_CFG_NUM_PARTITIONS=4
+      - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=2
+      - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_KRAFT_CLUSTER_ID=monitoring-lab-cluster
+      - KAFKA_JMX_PORT=9999
+      - KAFKA_JMX_HOSTNAME=kafka-2
+      - KAFKA_HEAP_OPTS=-Xms256m -Xmx256m
+    ports:
+      - "19093:19093"
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Postgres sink ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    hostname: postgres
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+      - POSTGRES_DB=clicks
+    volumes:
+      # Compose resolves relative paths against the FIRST compose file
+      # (labs/base/compose.yml), so we reach this lab's config via
+      # ../monitoring/, not ./. Same pattern used everywhere below.
+      - ../monitoring/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d clicks"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # ─── Spark 3.5 cluster ────────────────────────────────────────────────────
+  # OTel java agent is attached to BOTH master and workers via
+  # SPARK_DAEMON_JAVA_OPTS so the JVM itself is instrumented. Cluster traffic
+  # (driver→executor RPC, kafka client, JDBC) gets auto-spans this way.
+  # The spot listener is registered when spark-submit runs (in the ETL job
+  # script's spark-submit flags) — not at cluster level.
+  spark-master:
+    image: bitnamilegacy/spark:3.5
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+      # OTel java agent attached to the master daemon JVM. Distinct service.name
+      # so Tempo separates master from workers.
+      - SPARK_DAEMON_JAVA_OPTS=-javaagent:/opt/otel-jars/opentelemetry-javaagent.jar -Dotel.exporter.otlp.protocol=http/protobuf -Dotel.exporter.otlp.endpoint=http://otel-collector:4318 -Dotel.service.name=spark-master -Dotel.metric.export.interval=15000
+      - OTEL_COLLECTOR_GRPC=otel-collector:4317
+    volumes:
+      - otel-jars:/opt/otel-jars:ro
+      - etl-logs:/var/log/etl
+      # Spark Structured Streaming checkpoint dir — managed by Spark, holds
+      # offset commits + state-store snapshots. MUST live outside /var/log/etl
+      # because the OTel filelog receiver tails *.log in there.
+      - spark-checkpoints:/var/lib/spark-checkpoints
+      - ../..:/workspace:ro
+    working_dir: /workspace
+    user: root
+    command: ["/bin/bash", "/workspace/labs/monitoring/spark-init.sh", "master"]
+    ports:
+      - "8080:8080"   # Spark master UI
+      - "7077:7077"   # Spark master RPC (lets workspace clients connect if needed)
+    mem_limit: 700m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    depends_on:
+      jars-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  spark-worker-1:
+    image: bitnamilegacy/spark:3.5
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_WEBUI_PORT=8081
+      - SPARK_DAEMON_JAVA_OPTS=-javaagent:/opt/otel-jars/opentelemetry-javaagent.jar -Dotel.exporter.otlp.protocol=http/protobuf -Dotel.exporter.otlp.endpoint=http://otel-collector:4318 -Dotel.service.name=spark-worker -Dotel.resource.attributes=worker.id=spark-worker-1 -Dotel.metric.export.interval=15000
+    volumes:
+      - otel-jars:/opt/otel-jars:ro
+      - spark-checkpoints:/var/lib/spark-checkpoints
+      - ../..:/workspace:ro
+    working_dir: /workspace
+    user: root
+    command: ["/bin/bash", "/workspace/labs/monitoring/spark-init.sh", "worker"]
+    ports:
+      - "8081:8081"
+    mem_limit: 1500m
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+  spark-worker-2:
+    image: bitnamilegacy/spark:3.5
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1g
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_WEBUI_PORT=8082
+      - SPARK_DAEMON_JAVA_OPTS=-javaagent:/opt/otel-jars/opentelemetry-javaagent.jar -Dotel.exporter.otlp.protocol=http/protobuf -Dotel.exporter.otlp.endpoint=http://otel-collector:4318 -Dotel.service.name=spark-worker -Dotel.resource.attributes=worker.id=spark-worker-2 -Dotel.metric.export.interval=15000
+    volumes:
+      - otel-jars:/opt/otel-jars:ro
+      - spark-checkpoints:/var/lib/spark-checkpoints
+      - ../..:/workspace:ro
+    working_dir: /workspace
+    user: root
+    command: ["/bin/bash", "/workspace/labs/monitoring/spark-init.sh", "worker"]
+    ports:
+      - "8082:8082"
+    mem_limit: 1500m
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── OTel collector (contrib — required for jmx, postgresql, filelog) ─────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: otel-collector
+    hostname: otel-collector
+    command: ["--config=/etc/otel-collector.yaml"]
+    volumes:
+      - ../monitoring/config/otel-collector.yaml:/etc/otel-collector.yaml:ro
+      # Logs from the workspace's ETL output land here (workspace writes to
+      # this volume, collector reads via filelog receiver).
+      - etl-logs:/var/log/etl:ro
+    ports:
+      # OTLP gRPC + HTTP — exposed for visibility/debugging, not required
+      # since clients use the docker network.
+      - "4317:4317"
+      - "4318:4318"
+    mem_limit: 400m
+    cpus: 0.5
+    # The contrib collector ships as a distroless image with no shell or wget,
+    # so we can't run a script-based healthcheck. The health_check extension is
+    # still bound to :13133 inside the container (and surfaced on port 13133 of
+    # the docker network), but dependents must use `service_started` instead of
+    # `service_healthy`. Collector boot is reliable and fast (~1s); the lack
+    # of a strict health gate doesn't bite in practice.
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+      # Wait for Kafka + Postgres to be ready before the collector starts —
+      # otherwise the kafkametrics / postgresql receivers spam connection-
+      # refused stack traces during the boot race (they recover on the next
+      # scrape interval, but the noise is alarming during the lab tour).
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    hostname: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=6h"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ../monitoring/config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # ─── Loki (single-binary, filesystem) ─────────────────────────────────────
+  loki:
+    image: grafana/loki:3.2.1
+    container_name: loki
+    hostname: loki
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ../monitoring/config/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    # No host port — Grafana reaches Loki through the docker network.
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Tempo (single-binary, filesystem) ────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: tempo
+    hostname: tempo
+    command: ["-config.file=/etc/tempo/tempo-config.yaml"]
+    volumes:
+      - ../monitoring/config/tempo-config.yaml:/etc/tempo/tempo-config.yaml:ro
+      - tempo-data:/var/tempo
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3200/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ─── Grafana ──────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    hostname: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      # Anonymous role = Admin so students can use Explore without signing in.
+      # This is a teaching lab on localhost; no security implication.
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_USERS_DEFAULT_THEME=dark
+    volumes:
+      - ../monitoring/config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    mem_limit: 400m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  otel-jars:        # built/downloaded by jars-init, read by spark services
+  sbt-cache:        # sbt build cache (persists between bring-ups)
+  ivy-cache:        # ivy resolver cache
+  coursier-cache:   # coursier dep cache
+  prometheus-data:
+  loki-data:
+  tempo-data:
+  grafana-data:
+  etl-logs:         # ETL log files; workspace writes, collector reads via filelog
+  spark-checkpoints:  # Structured Streaming checkpoint + state-store snapshots

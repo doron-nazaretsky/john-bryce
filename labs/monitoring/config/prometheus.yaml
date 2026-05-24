@@ -1,0 +1,16 @@
+# Prometheus scrape config. The OTel collector turns every metric source
+# (Spark JVM agents, kafkametrics, postgresql receiver) into a single
+# /metrics endpoint at otel-collector:8889 — that is the only thing we scrape.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]

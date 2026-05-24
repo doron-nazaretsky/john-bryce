@@ -1,0 +1,115 @@
+# Grafana datasource provisioning.
+#
+# Three datasources wired for cross-signal correlation:
+#   - Prometheus (default; metrics)
+#   - Loki      (logs; derived field links Loki → Tempo via batch_id)
+#   - Tempo     (traces; tracesToLogsV2 links Tempo → Loki via batch_id)
+#
+# Honest-about-trace-fragmentation note: the V1 design dropped the Python
+# manual `etl_batch` span (see etl_daemon.py docstring), so Python ETL log
+# lines do NOT carry trace_id/span_id. The Loki↔Tempo pivot is therefore done
+# by `batch_id`, which is present on every log line (Python JSON formatter)
+# and on every Spark job/stage span (SparkListener attaches it as an
+# attribute via setJobDescription). batch_id is the wow-moment field.
+#
+# trace_id derived field is still configured because OTel-Java-agent spans
+# from JDBC / Kafka clients DO carry it; if students ever surface those via
+# Loki (e.g. enable instrumentation logging), the link will Just Work.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      # Derived fields scan each log LINE BODY (not labels) and render
+      # clickable buttons in the Explore log row.
+      #
+      # The OTel collector's filelog receiver moves the JSON `msg` field to
+      # the OTel body, so Loki stores the plain message text — `batch_id` is
+      # a Loki LABEL, not in the line. We therefore look for the inline form
+      # `batch_id=...` which the ETL daemon writes into "batch start" /
+      # "batch done" / "batch failed" messages. Lines without that form
+      # still surface batch_id as a clickable label in the Explore row.
+      derivedFields:
+        - name: batch_id
+          matcherRegex: 'batch_id=([A-Za-z0-9\-]+)'
+          datasourceUid: tempo
+          url: '$${__value.raw}'
+          urlDisplayLabel: 'View traces for batch'
+          internalLink: true
+        - name: trace_id
+          # Fires only when the OTel-Java-agent injects trace_id into a log
+          # line (Spark JVM logs via spot's logging propagation). Python ETL
+          # logs don't carry trace_id by design — see datasources header.
+          matcherRegex: '"trace_id"\s*:\s*"([a-f0-9]{32})"'
+          datasourceUid: tempo
+          url: '$${__value.raw}'
+          urlDisplayLabel: 'View trace'
+          internalLink: true
+
+  - name: Postgres
+    uid: postgres
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    user: app
+    secureJsonData:
+      password: app
+    jsonData:
+      database: clicks
+      sslmode: disable
+      postgresVersion: 1600
+    editable: false
+
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      # When the user opens a span in Tempo, the "Logs for this span" button
+      # queries Loki by `batch_id`. This works because the ETL daemon emits
+      # ONE manual `etl_batch` span per iteration (service.name=etl-driver)
+      # carrying `batch_id` as a span attribute. spot's job/stage spans do
+      # NOT carry batch_id (it has no property-promotion mechanism), so the
+      # link will only render on the etl_batch span itself — that's the
+      # intended pivot. See etl_daemon.py docstring for the full story.
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '-30s'
+        spanEndTimeShift: '30s'
+        tags:
+          - key: 'batch_id'
+            value: 'batch_id'
+        filterByTraceID: false
+        filterBySpanID: false
+        customQuery: true
+        # batch_id is a Loki *structured metadata* field (not a stream label),
+        # so we use a LogQL pipe filter rather than `{batch_id="..."}` (which
+        # would be a stream selector and not match).
+        query: '{service_name=~".+"} | batch_id=`$${__tags.batch_id}`'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: 'service.name'
+            value: 'service_name'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false

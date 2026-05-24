@@ -1,0 +1,510 @@
+{
+  "uid": "overview",
+  "title": "00 \u00b7 Overview",
+  "tags": [
+    "monitoring-lab"
+  ],
+  "schemaVersion": 39,
+  "version": 7,
+  "editable": false,
+  "style": "dark",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "refresh": "10s",
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "batch_id",
+        "label": "Batch",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values({service_name=\"etl\"}, batch_id)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": false,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "ETL Business",
+      "url": "/d/etl",
+      "type": "link",
+      "icon": "external link"
+    },
+    {
+      "title": "Kafka",
+      "url": "/d/kafka",
+      "type": "link",
+      "icon": "external link"
+    },
+    {
+      "title": "Spark",
+      "url": "/d/spark",
+      "type": "link",
+      "icon": "external link"
+    },
+    {
+      "title": "Postgres",
+      "url": "/d/postgres",
+      "type": "link",
+      "icon": "external link"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Last epoch",
+      "description": "Status of the most recent streaming micro-batch (epoch). RED = failed.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(1, sum by (level) (count_over_time({service_name=\"etl\"} |~ \"epoch (done|failed)\" | json [5m])))",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "INFO": {
+                  "text": "OK",
+                  "color": "semi-dark-green"
+                },
+                "ERROR": {
+                  "text": "FAILED",
+                  "color": "semi-dark-red"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Producer rate",
+      "description": "Events/sec being PUBLISHED to Kafka — derivative of broker-side high-watermark offsets (kafkametrics receiver). Independent of the consumer.",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(deriv(kafka_partition_current_offset_ratio{topic=\"clicks\"}[2m]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-blue",
+                "value": 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Consumer lag",
+      "description": "Max lag across all partitions. > a few thousand = backlog.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "max(kafka_consumer_records_lag_max)",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-green",
+                "value": 0
+              },
+              {
+                "color": "semi-dark-yellow",
+                "value": 5000
+              },
+              {
+                "color": "semi-dark-red",
+                "value": 50000
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Postgres write rate",
+      "description": "Upserts/sec into aggregated_clicks.",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(postgresql_operations_total{postgresql_table_name=\"public.aggregated_clicks\"}[1m]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 1
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Throughput \u2014 produced \u2192 consumed \u2192 written",
+      "description": "Pipeline in one panel. produced \u2248 consumed under steady state. 'rows written/sec' is the count of (product \u00d7 minute_window) AGGREGATE ROWS whose running total changed this micro-batch \u2014 naturally far smaller than consumed because each minute window holds many events. Large produced\u2194consumed divergence = backpressure or a stalled query.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 16,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(deriv(kafka_partition_current_offset_ratio{topic=\"clicks\"}[1m]))",
+          "refId": "P",
+          "legendFormat": "produced/sec"
+        },
+        {
+          "expr": "sum(rate(kafka_consumer_records_consumed_total[1m]))",
+          "refId": "A",
+          "legendFormat": "consumed/sec"
+        },
+        {
+          "expr": "sum(rate(postgresql_operations_total{postgresql_table_name=\"public.aggregated_clicks\",operation=~\"ins|upd\"}[1m]))",
+          "refId": "B",
+          "legendFormat": "rows written/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "drawStyle": "line",
+            "gradientMode": "opacity"
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Epochs OK / Failed (last 30m)",
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service_name=\"etl\"} |= \"epoch done\" [30m]))",
+          "refId": "A",
+          "legendFormat": "ok"
+        },
+        {
+          "expr": "sum(count_over_time({service_name=\"etl\"} |= \"epoch failed\" [30m]))",
+          "refId": "B",
+          "legendFormat": "failed"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "semi-dark-green"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "failed"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "semi-dark-red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Schema-drop WARNs (30m)",
+      "description": "Number of micro-batches in the last 30m that emitted a 'dropped N records missing product_id' WARN. > 0 = upstream data-quality issue (Scenario B). For the actual record count, drill into the ETL log stream.",
+      "gridPos": {
+        "x": 16,
+        "y": 9,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service_name=\"etl\"} |= \"dropped\" |= \"missing\" [30m]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-green",
+                "value": 0
+              },
+              {
+                "color": "semi-dark-yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Watermark-late WARNs (30m)",
+      "description": "Number of micro-batches in the last 30m where the watermark evicted late-arriving records. Distinct from schema-drops: these had a valid product_id but their event_time was more than 2 min behind the stream's max(event_time). > 0 = producer is back-dating events, or the pipeline has fallen behind.",
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 8,
+        "h": 11
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({service_name=\"etl\"} |~ `dropped_by_watermark=[1-9]\\\\d*` [30m]))"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "semi-dark-green",
+                "value": 0
+              },
+              {
+                "color": "semi-dark-yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "logs",
+      "title": "ETL log stream \u2014 click a batch_id chip to pivot to Tempo",
+      "gridPos": {
+        "x": 8,
+        "y": 13,
+        "w": 16,
+        "h": 11
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{service_name=\"etl\"} | batch_id =~ \"$batch_id|.*\"",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "showLabels": false,
+        "dedupStrategy": "none",
+        "sortOrder": "Descending",
+        "enableLogDetails": true
+      }
+    }
+  ]
+}

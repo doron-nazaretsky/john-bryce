@@ -282,6 +282,47 @@ project:
           children:
             - file: materials/streaming/04-exercises/01-streaming-exercises.md
 
+    - file: materials/monitoring/README.md
+      children:
+        - title: Introduction
+          children:
+            - file: materials/monitoring/01-introduction/01-why-observability.md
+            - file: materials/monitoring/01-introduction/02-the-four-pillars.md
+            - file: materials/monitoring/01-introduction/03-stack-tour.md
+        - title: Lab Tour
+          children:
+            - file: materials/monitoring/02-lab-tour/01-bring-up-the-lab.md
+            - file: materials/monitoring/02-lab-tour/02-grafana-orientation.md
+            - file: materials/monitoring/02-lab-tour/03-the-etl-pipeline.md
+        - title: Metrics
+          children:
+            - file: materials/monitoring/03-metrics/01-metrics-concepts.md
+            - file: materials/monitoring/03-metrics/02-the-metrics-pipeline.md
+            - file: materials/monitoring/03-metrics/03-reading-the-dashboards.md
+            - file: materials/monitoring/03-metrics/04-scenario-producer-spike.md
+        - title: Logs
+          children:
+            - file: materials/monitoring/04-logs/01-logs-concepts.md
+            - file: materials/monitoring/04-logs/02-the-logs-pipeline.md
+            - file: materials/monitoring/04-logs/03-querying-logs-in-grafana.md
+            - file: materials/monitoring/04-logs/04-scenario-bad-data-part1.md
+        - title: Traces
+          children:
+            - file: materials/monitoring/05-traces/01-traces-concepts.md
+            - file: materials/monitoring/05-traces/02-the-traces-pipeline.md
+            - file: materials/monitoring/05-traces/03-correlation-across-signals.md
+            - file: materials/monitoring/05-traces/04-scenario-bad-data-part2.md
+        - title: Putting It Together
+          children:
+            - file: materials/monitoring/06-putting-it-together/01-scenario-worker-kill.md
+            - file: materials/monitoring/06-putting-it-together/02-production-patterns.md
+        - title: Verification (Instructor)
+          children:
+            - file: materials/monitoring/07-verification/01-end-to-end-verification.md
+        - title: Exercises
+          children:
+            - file: materials/monitoring/08-exercises/01-monitoring-exercises.md
+
 site:
   template: book-theme
   title: Data Engineering Course

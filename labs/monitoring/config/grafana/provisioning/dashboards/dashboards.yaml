@@ -1,0 +1,17 @@
+# Dashboard provider — Grafana will auto-load any JSON files dropped into
+# /var/lib/grafana/dashboards (mounted from labs/monitoring/config/grafana/dashboards
+# in compose.yml). Step 1 ships no dashboards; step 4 fills the folder.
+
+apiVersion: 1
+
+providers:
+  - name: monitoring-lab
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

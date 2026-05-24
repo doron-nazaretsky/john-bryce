@@ -1,0 +1,122 @@
+# OpenTelemetry Collector — three signal pipelines.
+#
+# Receivers
+#   otlp           OTLP gRPC (4317) + HTTP (4318). Spark JVM agents (driver,
+#                  executors, master, workers) push metrics + traces + logs here.
+#   kafkametrics   Pulls broker / topic / partition offsets directly from the
+#                  Kafka admin protocol (no JMX, no Java in the collector).
+#   postgresql     Pulls pg_stat_* from the sink database.
+#   filelog        Tails the ETL JSON log file (written by the PySpark driver
+#                  inside spark-master, shared with the collector via the
+#                  etl-logs named volume).
+#
+# Exporters
+#   prometheus      Exposes /metrics on :8889 for Prometheus to scrape.
+#   otlphttp/loki   Loki 3.x speaks native OTLP at /otlp/v1/logs.
+#   otlp/tempo      Tempo speaks OTLP gRPC at :4317.
+#   debug           Quiet, kept for ad-hoc troubleshooting.
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  kafkametrics:
+    brokers: [kafka-1:9092, kafka-2:9092]
+    protocol_version: 3.7.0
+    scrapers: [brokers, topics, consumers]
+    collection_interval: 30s
+
+  postgresql:
+    endpoint: postgres:5432
+    transport: tcp
+    username: app
+    password: app
+    databases: [clicks]
+    tls:
+      insecure: true
+    collection_interval: 30s
+
+  filelog:
+    include: [/var/log/etl/etl.log]
+    start_at: beginning
+    operators:
+      - type: json_parser
+        timestamp:
+          parse_from: attributes.ts
+          # Python datetime.isoformat() yields '+00:00'; gotime accepts that.
+          layout_type: gotime
+          layout: "2006-01-02T15:04:05.999999999Z07:00"
+        severity:
+          parse_from: attributes.level
+      # Promote batch_id to a resource attribute so it ranks alongside
+      # service.name in Loki's label index.
+      - type: move
+        from: attributes.batch_id
+        to: resource["batch_id"]
+      - type: move
+        from: attributes.logger
+        to: resource["logger"]
+      - type: move
+        from: attributes.msg
+        to: body
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+  resource/lab:
+    attributes:
+      - key: lab
+        value: monitoring
+        action: upsert
+  # Default service.name for filelog logs (no resource attr on file lines).
+  resource/etl_service:
+    attributes:
+      - key: service.name
+        value: etl
+        action: insert
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp, kafkametrics, postgresql]
+      processors: [resource/lab, batch]
+      exporters: [prometheus]
+    logs/otlp:
+      receivers: [otlp]
+      processors: [resource/lab, batch]
+      exporters: [otlphttp/loki]
+    logs/etl:
+      receivers: [filelog]
+      processors: [resource/etl_service, resource/lab, batch]
+      exporters: [otlphttp/loki]
+    traces:
+      receivers: [otlp]
+      processors: [resource/lab, batch]
+      exporters: [otlp/tempo]

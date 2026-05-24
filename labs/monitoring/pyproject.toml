@@ -1,0 +1,12 @@
+[project]
+name = "lab-monitoring"
+version = "0.1.0"
+requires-python = ">=3.13"
+# The workspace ONLY runs: MyST docs, Jupyter, the producer daemon, and a bash
+# batch loop that docker-execs into spark-master. No Spark, no PySpark, no JDBC.
+# All Spark-side Python deps (psycopg for the per-partition upsert) are
+# installed inside the spark containers by labs/monitoring/spark-init.sh.
+dependencies = [
+    "click>=8.1,<9",            # producer + spark CLIs
+    "kafka-python>=2.0,<3",     # producer daemon -> Kafka
+]
