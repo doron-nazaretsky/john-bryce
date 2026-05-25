@@ -4,7 +4,7 @@ A data pipeline that "ran" is not the same as one that "worked". In a multi-step
 
 This is the core problem **observability** solves: how do you understand the *internal* state of a running system from *outside*, after the fact, without redeploying with extra `print` statements?
 
-## Monitoring vs Observability — a useful distinction
+## Monitoring vs observability
 
 These words are often used interchangeably. The practical distinction:
 
@@ -13,11 +13,9 @@ These words are often used interchangeably. The practical distinction:
 
 If your only tool is a dashboard, you can only see the things someone thought to put on the dashboard. Observability is what lets you investigate the question you didn't know you'd need to ask.
 
-The textbook formulation: observability requires three signals — **metrics** (what aggregate behaviour looks like), **logs** (what individual events happened), and **traces** (how a single request flowed through the system). The four-pillars view in the next lesson extends this with the instrumentation, collection, and storage that make the signals possible at all.
-
 ## Why this matters more in data engineering
 
-In a typical web backend, a failed request is loud: someone refreshes the page, sees a 500, files a ticket. The feedback loop is hours, sometimes minutes.
+In a typical web backend, a failed request is loud: someone refreshes the page, sees a 500, files a ticket. The feedback loop is minutes.
 
 Data pipelines don't have that property. Most pipeline failures are:
 
@@ -28,13 +26,25 @@ Data pipelines don't have that property. Most pipeline failures are:
 
 The first principle of DE observability: **trust no aggregate.** A KPI looking right means nothing if you can't drop into the underlying signals and verify each step on the pipeline produced the volume and shape you expected.
 
+## Whose job is the stack itself?
+
+In most companies you join, **you will not set this up.** A platform / SRE / DevOps team operates the observability stack — collector, Prometheus, Loki, Tempo, Grafana — as shared infrastructure, the same way they operate Kubernetes or the artifact registry. From a data engineer's seat, the stack is *given*: there is a Grafana URL, there is a collector endpoint, there are agreed-on conventions for labels and trace export.
+
+Your job, as a DE, is the other half:
+
+- **Pick the right business identifiers** (`batch_id`, `run_id`, `dataset_id`) and attach them to every signal your pipeline emits.
+- **Decide what to instrument manually** in your application code — usually one or two business-meaningful spans, the one or two domain-meaningful log fields, the metric you'd want on a dashboard one day.
+- **Read the dashboards** when something is off, follow the cross-signal pivots to the root cause, and write the incident note.
+
+That split is why this module spends a little time on "what the stack is and how it's wired" and most of it on "how to operate it as the DE consumer".
+
 ## What the rest of this module gives you
 
-By the end of the next 4 hours you will be able to:
+By the end you will be able to:
 
-1. Read the four pillars of an observability stack and recognise them when you encounter a new tool (today OTel + Grafana, tomorrow Datadog or Honeycomb).
-2. Operate a working observability stack — query LogQL, read PromQL panels, navigate a trace tree, jump between signals on a shared attribute.
+1. Recognise the four pillars of an observability stack when you encounter a new tool (today OTel + Grafana, tomorrow Datadog or Honeycomb).
+2. Operate a working stack — query LogQL, read PromQL panels, navigate a trace tree, jump between signals on a shared attribute.
 3. Diagnose three classes of failure end-to-end — producer overload, bad upstream data, infrastructure loss — using only the dashboards and the Explore view.
 4. Speak the language. When the SRE team says "what's the p99 of your batch duration broken down by stage", you will know that this is a span-level query and that it requires the right instrumentation on the right component.
 
-We will spend most of our time *using* the stack, not configuring it. The lab comes up pre-wired. The point is the way of seeing the system, not the YAML.
+Next: the four pillars of the stack, with concrete tool names attached.

@@ -44,9 +44,9 @@ os.makedirs(_LOG_DIR, exist_ok=True)
 STATUS_PATH = f"{_LOG_DIR}/spark-batch.status"
 
 CHECKPOINT_DIR = os.environ.get("CHECKPOINT_DIR", "/var/lib/spark-checkpoints/clicks")
-WATERMARK_DELAY = os.environ.get("WATERMARK_DELAY", "2 minutes")
-WINDOW_SIZE = os.environ.get("WINDOW_SIZE", "1 minute")
-TRIGGER_INTERVAL = os.environ.get("TRIGGER_INTERVAL", "60 seconds")
+WATERMARK_DELAY = os.environ.get("WATERMARK_DELAY", "30 seconds")
+WINDOW_SIZE = os.environ.get("WINDOW_SIZE", "30 seconds")
+TRIGGER_INTERVAL = os.environ.get("TRIGGER_INTERVAL", "10 seconds")
 
 
 class _JsonLineFormatter(logging.Formatter):

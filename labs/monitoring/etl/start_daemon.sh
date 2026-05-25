@@ -14,9 +14,9 @@ PID_FILE="${PID_FILE:-/var/log/etl/spark-batch-daemon.pid}"
 # dir is on its own volume (NOT under /var/log/etl, which the OTel filelog
 # receiver tails — binary checkpoint files would confuse it).
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-/var/lib/spark-checkpoints/clicks}"
-WATERMARK_DELAY="${WATERMARK_DELAY:-2 minutes}"
-WINDOW_SIZE="${WINDOW_SIZE:-1 minute}"
-TRIGGER_INTERVAL="${TRIGGER_INTERVAL:-60 seconds}"
+WATERMARK_DELAY="${WATERMARK_DELAY:-30 seconds}"
+WINDOW_SIZE="${WINDOW_SIZE:-30 seconds}"
+TRIGGER_INTERVAL="${TRIGGER_INTERVAL:-10 seconds}"
 export CHECKPOINT_DIR WATERMARK_DELAY WINDOW_SIZE TRIGGER_INTERVAL
 # spark-submit runs as root inside spark-master, but the JVM executors on
 # worker containers run as user `spark`. Make the checkpoint tree writable

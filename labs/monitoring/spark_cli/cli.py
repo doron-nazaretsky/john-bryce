@@ -58,7 +58,7 @@ def batch() -> None:
 
 
 @batch.command()
-@click.option("--trigger", "trigger_interval", default="60 seconds", show_default=True,
+@click.option("--trigger", "trigger_interval", default="10 seconds", show_default=True,
               help="processingTime trigger for the streaming query.")
 def start(trigger_interval: str) -> None:
     """Start the long-running Structured Streaming ETL in spark-master."""

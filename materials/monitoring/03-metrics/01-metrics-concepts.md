@@ -2,7 +2,7 @@
 
 Metrics are numeric values, sampled at regular intervals, indexed by a set of labels. They answer questions of the form "what does this number look like over time, broken down by these dimensions?"
 
-This sounds simple. It is. The trick is that almost every operational question — "is the system healthy", "is throughput dropping", "are tail latencies climbing" — can be expressed as a query against metrics. That's why metrics are the bedrock signal of observability.
+Almost every operational question — "is the system healthy", "is throughput dropping", "are tail latencies climbing" — can be expressed as a query against metrics. That's why metrics are the bedrock signal of observability.
 
 ## The three (and a half) metric types
 
@@ -12,11 +12,11 @@ Almost every metrics system uses these primitives. Names vary slightly; semantic
 
 **Gauge** — value that can go up or down. Current heap usage, current queue depth, current number of live executors. `jvm_memory_used_bytes`. You read it directly; `rate()` of a gauge is nonsense.
 
-**Histogram** — distribution of observations bucketed into ranges. The classic use is request durations: how many requests took 0–10ms, 10–100ms, 100ms–1s. Lets you compute percentiles (`histogram_quantile(0.99, ...)`). The cost is cardinality: each bucket is its own time series. Pre-2025 Prometheus histograms are very heavy; the newer *native histograms* fix this, but most ecosystems are still on classic.
+**Histogram** — distribution of observations bucketed into ranges. The classic use is request durations: how many requests took 0–10ms, 10–100ms, 100ms–1s. Lets you compute percentiles (`histogram_quantile(0.99, ...)`). The cost is cardinality: each bucket is its own time series. Pre-2025 Prometheus histograms are heavy; the newer *native histograms* fix this, but most ecosystems are still on classic.
 
 **Summary** — like a histogram but computes percentiles *client-side* per process. Can't be aggregated across instances. Less useful than histograms; mostly legacy.
 
-For the lab we'll use mostly counters (consumer records, postgres operations, commits) and gauges (heap, executor count, lag).
+For the lab we use mostly counters (consumer records, postgres operations, commits) and gauges (heap, executor count, lag).
 
 ## Cardinality — the only metric-side concept that can ruin your day
 
@@ -28,63 +28,64 @@ Series count = product of distinct values across all labels. If you have:
 
 A million series is enough to crash a modest Prometheus. The cardinality bombs are almost always:
 
-- **User IDs / session IDs / request IDs** as labels. NEVER do this.
+- **User IDs / session IDs / request IDs** as labels. Never.
 - **High-resolution timestamps** as labels. Same.
-- **URL paths with embedded IDs**, like `/users/42/orders/9117`. Strip the IDs before tagging.
+- **URL paths with embedded IDs** (`/users/42/orders/9117`). Strip the IDs before tagging.
 - **Free-text fields** (error messages, user agents). Use logs for these.
 
-Rule of thumb: any label value should come from a fixed-size enumeration (status codes, HTTP methods, service names, partition numbers). When you're tempted to add a high-cardinality label, you're really reaching for logs or traces, not metrics.
+Rule of thumb: any label value should come from a fixed-size enumeration (status codes, HTTP methods, service names, partition numbers). When you're tempted to add a high-cardinality label, you're reaching for logs or traces, not metrics.
 
-In this lab, `batch_id` is a perfect example of what *not* to put on a metric — every batch is a new value, unbounded growth over time. We use `batch_id` only in logs and traces.
+In this lab, `batch_id` is a perfect example of what *not* to put on a metric — every epoch is a new value, unbounded growth over time. `batch_id` lives in logs and traces only.
 
-## Scrape vs push (the OTel collector adjudicates)
+## Scrape vs push — the OTel Collector adjudicates
 
 Two opposing collection models:
 
-**Pull / scrape**: the storage backend periodically hits an HTTP endpoint exposed by the application or by a sidecar and reads the current state. This is Prometheus's native model. Good for: long-lived services with stable endpoints. Bad for: short-lived jobs, things behind NAT.
+**Pull / scrape**: the storage backend periodically hits an HTTP endpoint exposed by the application or sidecar and reads the current state. This is Prometheus's native model. Good for long-lived services with stable endpoints. Bad for short-lived jobs, things behind NAT.
 
-**Push**: the application sends metrics to a collector or backend at intervals. OTLP-push, statsd, CloudWatch. Good for: short-lived jobs, batched workloads, mobile clients. Bad for: lossy networks, slow collectors (backpressure).
+**Push**: the application sends metrics to a collector or backend at intervals. OTLP-push, statsd, CloudWatch. Good for short-lived jobs, batched workloads. Bad for lossy networks.
 
-OpenTelemetry's design is **push from the SDK or agent → push to the collector → Collector adapts**. The collector exposes a Prometheus-scrape endpoint on its `prometheus` exporter — Prometheus then *pulls* from the collector. You get push semantics from your workload and pull semantics for Prometheus, with the collector absorbing the impedance mismatch.
+OpenTelemetry's design is **push from the SDK or agent → push to the collector → collector adapts**. The collector exposes a Prometheus-scrape endpoint; Prometheus pulls from it. You get push semantics from your workload and pull semantics for Prometheus, with the collector absorbing the impedance mismatch.
 
 In our lab:
 
 ```
    Spark JVMs ──OTLP push──→ OTel Collector ──Prometheus scrape──→ Prometheus
-   (agent)
+   (Java agent)
 ```
 
 ## OTLP vs Prometheus exposition format
 
-Both are wire formats for metrics. OTLP is gRPC- or HTTP/protobuf-based and the OpenTelemetry-native format. Prometheus exposition is plain text over HTTP, looking like:
+Both are wire formats. OTLP is gRPC- or HTTP/protobuf-based and OpenTelemetry-native. Prometheus exposition is plain text over HTTP:
 
 ```
 # HELP kafka_consumer_records_lag ...
 # TYPE kafka_consumer_records_lag gauge
 kafka_consumer_records_lag{topic="clicks",partition="0"} 1234
-kafka_consumer_records_lag{topic="clicks",partition="1"} 8732
 ```
 
-Prometheus scrapes the latter. The OTel Collector translates OTLP-in → Prometheus-format-out via its `prometheus` exporter, which exposes the result at `:8889/metrics`. That's the URL Prometheus is configured to scrape in `config/prometheus.yaml`.
+Prometheus scrapes the latter. The OTel Collector translates OTLP-in → Prometheus-format-out via its `prometheus` exporter. Things to remember about the translation:
 
-You usually don't care about the format choice. You care that:
+- Counters get the `_total` suffix added (Prometheus convention).
+- Resource attributes from OTel become Prometheus labels via `resource_to_telemetry_conversion`. That's how `service.name=spark-driver` ends up as a Prom label.
 
-- Counters in OTLP get the `_total` suffix added when exposed as Prometheus (Prometheus convention).
-- Resource attributes from OTel become Prometheus labels via the `resource_to_telemetry_conversion` setting on the exporter. That's how `service.name=spark-driver` ends up as a Prom label.
+## In our lab — where the metrics come from
 
-## What our metrics pipeline gives us, concretely
+Three sources feed the collector (see [*The four pillars and our stack*](../01-foundations/02-pillars-and-stack.md) for the full topology):
 
-Without writing a line of metrics code, the agent on the Spark JVMs gives us:
+- **OTel Java agent** on every Spark JVM — JVM heap/GC/CPU, Kafka client lag and fetch latency, JDBC spans, etc. Pushed over OTLP every 15 seconds.
+- **`kafkametrics` receiver** in the collector — speaks the Kafka admin protocol, scrapes brokers every 30 seconds. Gives us `kafka_brokers`, `kafka_topic_partitions`, `kafka_partition_current_offset_ratio`.
+- **`postgresql` receiver** in the collector — reads `pg_stat_*` views every 30 seconds. Gives us `postgresql_commits_total`, `postgresql_operations_total{operation=ins|upd|del}`, `postgresql_db_size_bytes`, etc.
 
-- `jvm_memory_used_bytes{jvm_memory_type=heap,service_name=spark-driver,...}` — heap usage by JVM
-- `jvm_gc_duration_seconds_*` — GC pause distributions
-- `jvm_cpu_recent_utilization_ratio` — process CPU
-- `kafka_consumer_records_lag*`, `kafka_consumer_records_consumed_total` — auto-instrumented Kafka client
-- `kafka_consumer_fetch_latency_*` — fetch RTT
+The collector pipeline then exposes all of these at `:8889/metrics`, and Prometheus is configured with exactly one scrape target — the collector. **Prometheus does not talk to Kafka, Postgres, or Spark directly.** That's the central principle of using a collector: only one thing knows about your storage backend.
 
-The collector's pull-mode receivers give us:
+Quick sanity:
 
-- `kafka_brokers`, `kafka_topic_partitions`, `kafka_partition_current_offset_ratio` — from the kafkametrics receiver (Kafka admin protocol)
-- `postgresql_commits_total`, `postgresql_rollbacks_total`, `postgresql_rows{state=live}`, `postgresql_operations_total` — from the postgresql receiver (`pg_stat_*` views)
+```bash
+curl -s 'http://localhost:9090/api/v1/label/__name__/values' \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d["data"]))'
+```
 
-That's enough metrics to investigate any infrastructure-level issue without writing a single `metric.inc()`. The next page walks through how the OTel collector ties this together.
+You'll see ~400 metric names. Enough to investigate any infrastructure-level issue without writing a single `metric.inc()`.
+
+Next: how to read these metrics in the four dashboards we shipped.
