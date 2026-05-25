@@ -1,0 +1,68 @@
+# Lume capstone — self-contained compose (does NOT merge labs/base/compose.yml).
+#
+# Ships only the upstream vendor mock:
+#   data-init    one-shot: downloads + preprocesses the LCL dataset into the
+#                meter-data volume. Idempotent (skips if _READY is present).
+#   meter-vendor FastAPI service that reads from that volume. Serves
+#                GET /readings (paginated archive) and pushes POST webhooks
+#                via the replay loop.
+#
+# Students add their own services (Kafka, Postgres, monitoring, etc.) below.
+# Container names and host ports are prefixed/shifted so this can coexist with
+# the main course `labs/` (which use the default ports).
+
+name: lume
+
+volumes:
+  meter-data:
+
+services:
+  data-init:
+    build: ./vendor
+    container_name: lume-data-init
+    command: ["python", "/app/download_and_preprocess.py", "/data"]
+    volumes:
+      - meter-data:/data
+    # Needs REPLAY_WINDOW_START/END (and optionally PREPROCESS_BACKFILL_DAYS,
+    # LCL_ZIP_PATH for fast iteration) so it knows what slice to keep.
+    env_file:
+      - .env
+    restart: "no"
+
+  meter-vendor:
+    build: ./vendor
+    container_name: lume-meter-vendor
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    volumes:
+      - meter-data:/data
+    ports:
+      - "18100:8000"
+    # We don't use env_file here on purpose: env_file values always win over
+    # shell-exported vars, which would defeat `make vendor-chaos` (it exports
+    # the chaos knobs at the shell). Instead use compose variable substitution
+    # — values resolve from shell first, then from .env (compose loads it
+    # automatically), then from the inline default.
+    environment:
+      DATA_DIR: /data
+      REPLAY_SECONDS_PER_DAY: ${REPLAY_SECONDS_PER_DAY:-3}
+      REPLAY_WINDOW_START: ${REPLAY_WINDOW_START:-2013-12-01}
+      REPLAY_WINDOW_END: ${REPLAY_WINDOW_END:-2014-02-28}
+      REPLAY_LOOP: ${REPLAY_LOOP:-true}
+      VENDOR_DUPLICATE_RATE: ${VENDOR_DUPLICATE_RATE:-0.0}
+      VENDOR_REORDER_RATE: ${VENDOR_REORDER_RATE:-0.0}
+      VENDOR_LATE_RATE: ${VENDOR_LATE_RATE:-0.0}
+      VENDOR_OUTAGE_SCHEDULE: ${VENDOR_OUTAGE_SCHEDULE:-}
+    # host.docker.internal works out of the box on Docker Desktop (mac/windows).
+    # The extra_hosts mapping below makes it resolve on Linux too, so student
+    # webhook receivers running on the host are reachable from the container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
