@@ -55,59 +55,65 @@ def apply_late_correction(
 
     _log(f"applying late correction to {ym}")
 
+    # Stream by row-group rather than loading the whole 500 MB parquet into
+    # memory (which can spike to several GB decompressed and OOM-kill the
+    # publisher on a default Docker Desktop allocation). We mutate exactly
+    # one row group — the rest stream through unchanged.
     try:
-        table = pq.read_table(src)
+        pf = pq.ParquetFile(src)
     except Exception as e:
-        _log(f"read failed for {ym}: {e}")
+        _log(f"open failed for {ym}: {e}")
         return None
 
-    n_rows = table.num_rows
-    if n_rows == 0:
+    if pf.num_row_groups == 0:
         return None
-
-    # Pick ~50 deterministic row indices to mutate.
-    n_mutate = min(50, n_rows)
-    indices = sorted(rng.sample(range(n_rows), n_mutate))
-
-    if "base_passenger_fare" not in table.column_names:
+    schema = pf.schema_arrow
+    if "base_passenger_fare" not in schema.names:
         _log(f"{ym}: no base_passenger_fare column; skipping")
         return None
+    col_idx = schema.names.index("base_passenger_fare")
 
-    col = table.column("base_passenger_fare")
-    py_values = col.to_pylist()
-    nudges: list[tuple[int, float, float]] = []
-    for idx in indices:
-        old = py_values[idx]
-        if old is None:
-            continue
-        # Deterministic small nudge: +/- $0.50 .. $2.50.
-        delta = round(rng.uniform(-2.5, 2.5), 2)
-        if delta == 0.0:
-            delta = 0.25
-        new_val = float(old) + delta
-        py_values[idx] = new_val
-        nudges.append((idx, float(old), new_val))
+    # Pick a single row group to mutate (deterministic per-roll).
+    target_rg = rng.randrange(pf.num_row_groups)
 
-    if not nudges:
-        return None
-
-    # Replace the column.
-    new_col = pa.array(py_values, type=col.type)
-    new_table = table.set_column(
-        table.column_names.index("base_passenger_fare"), "base_passenger_fare", new_col
-    )
-
-    # Write to a tmp file, then upload.
     with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False, dir=str(cache_dir)) as tmp:
         tmp_path = Path(tmp.name)
+
+    nudges: list[tuple[int, float, float]] = []
     try:
-        pq.write_table(new_table, tmp_path, compression="snappy")
-        # Atomically replace the cached copy so subsequent corrections build
-        # on the corrected file (and any restart picks up the mutated bytes).
+        writer = pq.ParquetWriter(tmp_path, schema, compression="snappy")
+        try:
+            for rg_idx in range(pf.num_row_groups):
+                table = pf.read_row_group(rg_idx)
+                if rg_idx == target_rg:
+                    col = table.column(col_idx)
+                    py_values = col.to_pylist()
+                    n_mutate = min(50, len(py_values))
+                    indices = sorted(rng.sample(range(len(py_values)), n_mutate))
+                    for idx in indices:
+                        old = py_values[idx]
+                        if old is None:
+                            continue
+                        delta = round(rng.uniform(-2.5, 2.5), 2)
+                        if delta == 0.0:
+                            delta = 0.25
+                        new_val = float(old) + delta
+                        py_values[idx] = new_val
+                        nudges.append((idx, float(old), new_val))
+                    new_col = pa.array(py_values, type=col.type)
+                    table = table.set_column(col_idx, "base_passenger_fare", new_col)
+                writer.write_table(table)
+                # Drop reference so the GC can reclaim the row group before the next read.
+                del table
+        finally:
+            writer.close()
         tmp_path.replace(src)
     except Exception as e:
         _log(f"write/replace failed: {e}")
         tmp_path.unlink(missing_ok=True)
+        return None
+
+    if not nudges:
         return None
 
     new_etag = put_month_file(s3, ym)

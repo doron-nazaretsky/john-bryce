@@ -288,6 +288,7 @@ def main() -> int:
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
         .option("subscribe", CLICKS_TOPIC)
         .option("startingOffsets", "latest")
+        .option("failOnDataLoss", "false")
         .load()
     )
 

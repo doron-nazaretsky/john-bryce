@@ -46,7 +46,10 @@ Open **[00 · Overview](http://localhost:3001/d/overview)**. The **Schema-drop W
 Same signal, inline:
 
 ```{code-cell} python
-print(prom('sum(count_over_time({service_name="etl"} |= "dropped" |= "missing" [5m]))'))
+# This is a LogQL count (not PromQL), so it goes to Loki's instant endpoint.
+r = requests.get("http://loki:3100/loki/api/v1/query",
+                 params={"query": 'sum(count_over_time({service_name="etl"} |= "dropped" |= "missing" [5m]))'}).json()
+print(r["data"]["result"])
 ```
 
 If you missed it on Overview, **[40 · ETL Business](http://localhost:3001/d/etl)** carries the same signal twice — the **Schema-drop WARNs (1h)** stat and the **Schema-drop WARNs / sec** timeseries (a single spike). In production this query would back an alert rule.
