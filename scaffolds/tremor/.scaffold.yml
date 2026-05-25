@@ -1,0 +1,22 @@
+name: tremor
+title: (final project) Tremor — newsroom story-lead desk
+description: >
+  Capstone C. A national news organisation's data team ("Tremor") runs the
+  GDELT 2.0 firehose for the morning editorial meeting — surfacing protest
+  spikes, theme shifts and over-amplifying outlets before competitors do. The
+  scaffold ships only the upstream: a `gdelt-vendor` sidecar that downloads a
+  7-day window of GDELT, curates the raw CAMEO/GKG payload into three small
+  CSVs per 15-minute slice, and serves them on a simulated clock with a real
+  manifest contract and togglable chaos. Students design ingest, storage,
+  dashboards, alerting — and defend live with SQL.
+exclude:
+  - "_plan.md"
+  - "**/__pycache__/"
+  - "data/"
+  - "*.egg-info/"
+  - ".pytest_cache/"
+post_init: .post-init.py
+next_steps:
+  - "cd {target}"
+  - "make run                # build vendor image, download + curate GDELT, start gdelt-vendor"
+  - "open BRIEF.md           # read the project brief"
