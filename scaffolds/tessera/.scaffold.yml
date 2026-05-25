@@ -1,0 +1,21 @@
+name: tessera
+title: (final project) Tessera — low-latency NYC mobility analytics
+description: >
+  Capstone B. A public mobility-analytics product over NYC TLC High-Volume
+  For-Hire-Vehicle (Uber/Lyft/Via) data. The customer promise is interactive
+  sub-second answers over ~80M rows. The scaffold ships only the upstream:
+  a MinIO bucket and a tlc-publisher service that drips HV-FHV monthly parquet
+  drops into the bucket on a simulated clock (fed from CloudFront-hosted TLC
+  files preprocessed by data-init on first `make run`). Students design the
+  rest — ingest, serving layer, indexes, materialised cubes — and defend
+  their five sub-second queries live.
+exclude:
+  - "**/__pycache__/"
+  - "data/"
+  - "*.egg-info/"
+  - ".pytest_cache/"
+post_init: .post-init.py
+next_steps:
+  - "cd {target}"
+  - "make run                # build vendor image, download TLC data, start MinIO + publisher"
+  - "open BRIEF.md           # read the project brief"
