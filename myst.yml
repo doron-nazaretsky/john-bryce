@@ -11,14 +11,36 @@ project:
     - python
     - docker
   github: https://github.com/john-bryce
-  # When thebe runs a {code-cell}, Jupyter starts the kernel with cwd set to
-  # the source MD's directory, so Spark creates `./artifacts/spark-<uuid>/`
-  # there (Spark 4.0 ArtifactManager). MyST's file watcher sees the new path,
-  # fires "Triggered full site rebuild", and the page reload kills the live
-  # kernel session — students see the cell silently lose its output. Exclude
-  # the artifacts subtrees so transient runtime files don't poke the watcher.
+  # The workspace container bind-mounts the entire repo at /workspace so tools
+  # like `make convert`, scaffold scripts, and docker.sock all work. But `myst
+  # start` watches the project root, so writes anywhere in the tree can fire
+  # "Triggered full site rebuild" — which kills live kernel sessions (e.g.
+  # Spark 4.0's ArtifactManager writes `./artifacts/spark-<uuid>/` next to the
+  # source MD when thebe runs a {code-cell}, and students see the cell
+  # silently lose its output on the page reload).
+  #
+  # Solution: explicitly exclude every top-level path that isn't `materials/`,
+  # so only edits under materials/ trigger a rebuild. Keep this list in sync
+  # if a new top-level directory is added to the repo.
+  # NOTE on glob style: myst-cli passes these patterns straight to chokidar's
+  # `ignored` option (with cwd at the project root). chokidar/picomatch needs
+  # `**/` prefixes to reliably match — see myst-cli's own defaults
+  # (`**/_build/**`, `**/node_modules/**`). Patterns without that prefix
+  # (e.g. plain `labs/**`) silently fail to ignore.
   exclude:
+    # transient runtime output (Spark artifacts, etc.) — anywhere in the tree
     - "**/artifacts/**"
+    # top-level non-content directories
+    - "**/data/**"
+    - "**/labs/**"
+    - "**/scaffolds/**"
+    - "**/scripts/**"
+    # top-level markdown that isn't part of the course site
+    - "**/README.md"
+    - "**/SKILL.md"
+    - "**/end_to_end.md"
+    - "**/*Capstone*.md"
+    # instructor-only drafts inside materials/
     - "materials/monitoring/_blueprint.md"
     - "materials/monitoring/_audit.md"
   jupyter:
