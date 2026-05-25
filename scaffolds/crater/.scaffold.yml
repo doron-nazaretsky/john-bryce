@@ -1,0 +1,24 @@
+name: crater
+title: (final project) Crater — talent intelligence for engineering leaders
+description: >
+  Capstone E. Crater is a fictional SaaS that turns the GH Archive public-events
+  firehose into inferred signals about senior individual contributors — what
+  they actually code in, who they collaborate with, where interest converts to
+  contribution. Customers are VPs of Engineering and recruiters at well-funded
+  startups. The scaffold ships only the upstream: a pull-based vendor mock that
+  serves gzipped hourly JSONL files via a URL-template contract, gated by a
+  simulated clock, fed from data.gharchive.org (downloaded once by a data-init
+  sidecar on first `make run`). Students design the rest — probing, ingest,
+  polymorphic normalisation, storage shape, and the analyst SQL surface — and
+  defend their system live by running five recruiter-style queries against it.
+exclude:
+  - "**/__pycache__/"
+  - "data/"
+  - "*.egg-info/"
+  - ".pytest_cache/"
+  - "_plan.md"
+post_init: .post-init.py
+next_steps:
+  - "cd {target}"
+  - "make run                # build vendor image, download GH Archive window, start gh-archive-vendor"
+  - "open BRIEF.md           # read the project brief"
