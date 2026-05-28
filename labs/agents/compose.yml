@@ -1,0 +1,56 @@
+# Agents lab: PostgreSQL with pgvector sidecar.
+# Backs materials/agents/ ("talk to your data" SQL agent + RAG sidebar).
+# Merges with labs/base/compose.yml — do not duplicate the workspace service here.
+#
+# Connection: postgresql://postgres:postgres@postgres:5432/pagila
+# Usage: make lab-agents
+#
+# Requires OPENAI_API_KEY in the host shell or .env file. The workspace
+# container picks it up via the environment block below.
+
+services:
+  workspace:
+    build:
+      args:
+        LAB: agents
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-pagila}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-pagila}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    container_name: postgres
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pagila}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - agents_postgres_data:/var/lib/postgresql/data
+      # SQL files in this directory are executed in alphabetical order on
+      # first startup (empty data volume). See pagila-schema.sql + pagila-data.sql
+      # which are fetched by `make agents-seed-fetch`.
+      #
+      # Note: docker compose resolves relative bind paths from the FIRST -f file's
+      # directory (labs/base/), not from this file's directory. Hence ../agents/seed.
+      - ../agents/seed:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pagila}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  agents_postgres_data:

@@ -15,10 +15,11 @@
 .PHONY: docs lab-preflight lab-orm lab-sql lab-nosql lab-replica-set lab-sharded lab-distributed lab-web \
         lab-redis lab-redis-sentinel lab-redis-cluster \
         lab-neo4j lab-neo4j-cluster \
-        lab-streaming lab-monitoring \
+        lab-streaming lab-monitoring lab-agents \
         new-project test-scaffolds \
         down reset shell convert \
         replica-set-init sharded-init sql-restore redis-cluster-init neo4j-cluster-init \
+        agents-seed-fetch \
         help
 
 BASE := -f labs/base/compose.yml
@@ -42,6 +43,7 @@ help:
 	@echo "  make lab-neo4j-cluster    Start workspace + 3-node Neo4j causal cluster (Graph lesson 07)"
 	@echo "  make lab-streaming        Start 3-broker Kafka (KRaft) + Spark cluster (Streaming lessons)"
 	@echo "  make lab-monitoring       Start full observability stack + Spark cluster + Kafka + Postgres (Monitoring lesson)"
+	@echo "  make lab-agents           Start workspace + Postgres/pgvector seeded with Pagila (AI Agents lesson)"
 	@echo ""
 	@echo "  make new-project          Scaffold a capstone project into a new directory (pass ARGS=... for flags)"
 	@echo "  make test-scaffolds       Verify scaffolds fail correctly, then pass once solutions are overlaid"
@@ -148,6 +150,29 @@ lab-streaming: lab-preflight
 	@echo "Kafka brokers (host):       localhost:19092, localhost:19093, localhost:19094"
 	@echo "Spark UI:                   http://localhost:4040  (while a query is running)"
 	@echo "Kafka UI (Kafbat):          http://localhost:18080  (topics, partitions, consumer-group lag)"
+
+lab-agents: lab-preflight agents-seed-fetch
+	docker compose $(BASE) -f labs/agents/compose.yml up -d --build --remove-orphans
+	@echo "MyST docs (workspace): http://localhost:3000"
+	@echo "JupyterLab (workspace): http://localhost:8888  (token: local-dev)"
+	@echo "Postgres (host):       localhost:5432  (user postgres / password postgres / db pagila)"
+	@echo ""
+	@echo "Reminder: export OPENAI_API_KEY=sk-... before running lesson cells."
+
+# Fetch Pagila schema + data from upstream if not already present in labs/agents/seed/.
+# Idempotent: skips download when both files already exist.
+PAGILA_RAW := https://raw.githubusercontent.com/devrimgunduz/pagila/master
+agents-seed-fetch:
+	@mkdir -p labs/agents/seed
+	@if [ ! -f labs/agents/seed/01-pagila-schema.sql ]; then \
+		echo "Fetching Pagila schema..."; \
+		curl -fsSL $(PAGILA_RAW)/pagila-schema.sql -o labs/agents/seed/01-pagila-schema.sql; \
+	fi
+	@if [ ! -f labs/agents/seed/02-pagila-data.sql ]; then \
+		echo "Fetching Pagila data (~3 MB)..."; \
+		curl -fsSL $(PAGILA_RAW)/pagila-data.sql -o labs/agents/seed/02-pagila-data.sql; \
+	fi
+	@echo "Pagila seed ready in labs/agents/seed/"
 
 lab-monitoring: lab-preflight
 	docker compose $(BASE) -f labs/monitoring/compose.yml up -d --build --remove-orphans

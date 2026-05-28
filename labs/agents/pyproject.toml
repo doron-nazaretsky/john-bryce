@@ -1,0 +1,14 @@
+[project]
+name = "lab-agents"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "openai>=1.54",
+    "openai-agents>=0.0.6",
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "mcp>=1.0",
+    "tiktoken>=0.8",
+    "numpy>=2.0",
+    "pandas>=2.2",
+]

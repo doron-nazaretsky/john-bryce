@@ -1,0 +1,4 @@
+# Pagila schema + data are fetched from upstream by `make agents-seed-fetch`.
+# Do not commit them — they are large and the upstream is the source of truth.
+01-pagila-schema.sql
+02-pagila-data.sql

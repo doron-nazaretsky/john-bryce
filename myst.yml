@@ -306,6 +306,52 @@ project:
           children:
             - file: materials/streaming/04-exercises/01-streaming-exercises.md
 
+    - file: materials/agents/README.md
+      children:
+        - title: Foundations
+          children:
+            - file: materials/agents/01-foundations/01-llm-as-api.md
+            - file: materials/agents/01-foundations/02-from-completion-to-agent.md
+            - file: materials/agents/01-foundations/03-what-were-building.md
+        - title: Tool Calling
+          children:
+            - file: materials/agents/02-tool-calling/01-function-calling-basics.md
+            - file: materials/agents/02-tool-calling/02-first-agent-loop.md
+            - file: materials/agents/02-tool-calling/03-designing-tools.md
+        - title: MCP
+          children:
+            - file: materials/agents/03-mcp/01-what-is-mcp.md
+            - file: materials/agents/03-mcp/02-writing-a-tiny-mcp-server.md
+            - file: materials/agents/03-mcp/03-using-mcp-in-the-agent.md
+        - title: Data Agent
+          children:
+            - file: materials/agents/04-data-agent/01-sql-tools.md
+            - file: materials/agents/04-data-agent/02-system-prompt-for-sql.md
+            - file: materials/agents/04-data-agent/03-end-to-end-walkthrough.md
+            - file: materials/agents/04-data-agent/04-error-recovery.md
+        - title: Context Management
+          children:
+            - file: materials/agents/05-context-management/01-conversation-history.md
+            - file: materials/agents/05-context-management/02-summarization.md
+            - file: materials/agents/05-context-management/03-prompt-caching.md
+            - file: materials/agents/05-context-management/04-caching-vs-summarization.md
+        - title: Safety
+          children:
+            - file: materials/agents/06-safety/01-prompt-injection.md
+            - file: materials/agents/06-safety/02-guards.md
+        - title: RAG Sidebar
+          children:
+            - file: materials/agents/07-rag-sidebar/01-embeddings.md
+            - file: materials/agents/07-rag-sidebar/02-pgvector-demo.md
+        - title: Patterns and Frameworks
+          children:
+            - file: materials/agents/08-patterns-and-frameworks/01-patterns.md
+            - file: materials/agents/08-patterns-and-frameworks/02-frameworks-tour.md
+            - file: materials/agents/08-patterns-and-frameworks/03-evals-and-observability.md
+        - title: Exercise
+          children:
+            - file: materials/agents/09-exercises/01-extend-the-agent.md
+
     - file: materials/monitoring/README.md
       children:
         - title: Foundations
