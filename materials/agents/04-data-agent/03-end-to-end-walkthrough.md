@@ -121,7 +121,7 @@ def run_tool_call(tc, *, verbose=True):
     result = TOOL_IMPL[tc.function.name](**args)
     if verbose:
         short = result if len(result) < 120 else result[:117] + "..."
-        print(f"  {tc.function.name}({list(args.keys())}) -> {short}")
+        print(f"  {tc.function.name}({list(args.values())}) -> {short}")
     return {"role": "tool", "tool_call_id": tc.id, "content": result}
 
 def run_data_agent(user_question: str, *, max_turns: int = 12, verbose: bool = True):
