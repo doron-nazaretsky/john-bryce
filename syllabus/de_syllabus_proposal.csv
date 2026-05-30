@@ -1,0 +1,197 @@
+Module,Sub-topics,Meetings,Hours
+"Foundations: Docker, Linux & Computing","Meeting 1 — Docker & the shared environment:
+• Pre-work: install WSL2 + Docker Desktop (Windows) / Docker Desktop (Mac) — everyone on the same footing
+• Why containers: reproducibility and a shared, deterministic environment
+• Images & containers: pull, run, exec into a container
+• Linux on a container: working inside the shared distro — filesystem & basic CLI
+• Volumes & ports: persistence and networking
+• Docker Compose: the multi-service reproducible dev environment used all course
+Meeting 2 — OS & compute fundamentals:
+• The machine model: CPU, RAM, disk, network — and a cost intuition for each
+• Memory hierarchy (cache to RAM to disk), caching, and running out: spills & OOM
+• CPU & concurrency: cores, parallelism vs concurrency, CPU-bound vs I/O-bound
+• Disk & I/O: HDD vs SSD, sequential vs random access, throughput vs latency
+• Network: bandwidth vs latency; the network as the slowest link when distributed
+• Serialization: crossing memory/disk/network boundaries (foreshadows Parquet/Avro & the shuffle)
+• Scaling: vertical limits to horizontal scaling — why distributed systems exist; latency numbers every engineer should know",2,9
+Software Engineering with Python,"M1 — Python basics (builds on pre-shared Python & Git kits; class = fast review + live coding & exercises):
+• Python as an interpreted language: REPL, no compile step, runtime errors
+• Syntax, control flow (conditionals, loops), functions
+• Package management with uv & pip; virtual environments
+• Type hints, error handling, logging
+• Basic debugging: reading tracebacks, breakpoints, using a debugger
+• Jupyter notebooks: the concept, and notebook (exploration) vs modules (production)
+• Git walk-through (based on the Git kit): workflow, commits, branching, PRs
+M2 — Data structures & complexity:
+• Core structures in depth: lists, tuples, dicts, sets, stacks, queues, hashing (+ trees conceptually)
+• Big O notation: time & space complexity and how to estimate it
+• Choosing the right structure for the job
+• Comprehensions & generators as the pythonic way to work with them
+M3 — Code organization, OOP & interfaces:
+• Code organization: modules, packages, separation of concerns
+• OOP: classes, composition over inheritance
+• Interfaces / protocols / duck typing; intro to SOLID
+M4 — Design patterns & data access:
+• Common design patterns for DE (factory, strategy, repository, ...)
+• ORM (SQLAlchemy) & migrations (Alembic)
+• API & webhook clients: auth, pagination, rate limits, retries
+M5 — Testing, quality & TDD:
+• Unit & integration tests, fixtures, mocking, coverage
+• TDD (red-green-refactor); refactoring
+• Linters & formatters; CI basics (running tests automatically)
+M6 — AI-assisted development & SDD:
+• Maintainability-first: cheap generation makes clean code, patterns & tests matter more
+• AI tooling & prompting techniques
+• Applying clean code / patterns / TDD to AI output and verifying it
+• Spec-Driven Development (SDD) with OpenSpec",6,27
+"Relational Databases, Deep","(Core SQL is a course prerequisite — no class time on SELECT/JOIN/GROUP BY)
+M1 — What is a database, in depth (Postgres as the lens):
+• What a DB actually is: the problem it solves beyond 'a place to store data'
+• Postgres architecture: cooperating processes + shared memory (postmaster, backends, background workers, shared buffers, WAL)
+• Disk layout: how data physically lives on disk (pages/heap, WAL)
+• The life of a query: parser, planner, executor
+M2 — Performance: the optimizer, EXPLAIN & indexes:
+• What the query optimizer/planner is and does
+• Reading EXPLAIN and EXPLAIN ANALYZE: seq scan vs index scan, joins, costs vs actuals
+• Analyzing different queries hands-on
+• Indexes as a direct descendant of the Python data-structures lesson: B-trees & hash indexes — what an index is underneath
+• When to add an index: cost/benefit, write overhead, how to decide; ANALYZE & statistics
+M3 — Transactions, isolation & MVCC:
+• Transactions & ACID
+• Isolation levels and the anomalies they prevent
+• Basic MVCC: row versions, how Postgres implements it
+• How MVCC & isolation affect performance: vacuum/bloat, lock contention",3,13.5
+"Data Warehousing, OLAP & MPP","M1 — Why a warehouse: OLTP vs OLAP & MPP:
+• OLTP vs OLAP: why you can't just run analytics on your production DB
+• Dimensional modeling: star/snowflake, facts & dimensions, SCD
+• Normalization vs denormalization — and why analytics denormalizes
+• MPP concepts: how a warehouse parallelizes a query across nodes — the first real-life distributed-systems material (sets up Spark)
+M2 — Storage formats & how MPP works under the hood:
+• Row vs columnar storage — why columnar makes OLAP/MPP fast
+• Data formats: Parquet, Avro, ORC; compression & encoding
+• Partitioning & file layout, leading to parallel scans
+• Table formats (Iceberg/Delta) — concept
+• Connection to sources and the lake",2,9
+"Building Data Pipelines with Python","M1 — Pipelines by hand I (building):
+• Build bronze-silver-gold with vanilla Python + Postgres (containerized)
+• Extract patterns: full vs incremental
+• Load patterns: append, upsert/merge, overwrite
+• SCD application
+M2 — Pipelines by hand II (operating = primitive Airflow):
+• Idempotency (safe re-runs) & incrementality (watermarks)
+• Control/manage table: run history, watermarks, status
+• Scheduling with cron; mini-DAG dependency walker
+• Retries, error handling & failure recovery
+• Backfilling & late-arriving data
+• Atomic loads: staging tables & swaps (callback to MVCC/transactions)
+M3 — Airflow, the real orchestrator:
+• DAGs, operators, sensors, hooks, XComs, scheduling, retries, backfills — mapped onto the primitive they built
+• Managed Airflow (MWAA) as the cloud variant
+• Dagster shown as the modern asset-based alternative
+M4 — ELT & dbt I:
+• ETL vs ELT: push transformation into the warehouse
+• dbt: models, sources, refs, materializations
+• Building silver-gold transformations in dbt (hands-on)
+M5 — ELT & dbt II:
+• dbt tests, lineage & docs
+• Snapshots (SCD in dbt); incremental models
+• CDC as a concept (Debezium as a brief mention)
+• Consolidate the anchor project's pipeline end-to-end",5,22.5
+"Cloud Data Engineering","M1 — Cloud foundations (theory):
+• Why cloud: rent-vs-own, elasticity, managed services; regions & AZs; shared-responsibility model
+• IAM: roles, policies, least privilege
+• Networking: VPC, subnets, security groups
+• S3 as the data lake; the cost mindset
+M2 — Services & IaC (theory):
+• Compute & containers: ECS + ECR (run the Docker pipeline images from Module 1); EKS/K8s at a high level only
+• Managed DB: RDS
+• Lake & analytics: S3, Glue (catalog + ETL), Athena, Redshift (managed warehouse — concept)
+• Terraform: IaC as a concept, generated with AI
+M3 — Make the project cloud-native (hands-on):
+• Source files to S3
+• Python ETL containers to ECR (registry) + ECS (run)
+• Processed data to S3 (Parquet) + Glue Data Catalog
+• Query/serving via Athena
+• Orchestration on MWAA (managed Airflow); Airflow on EKS as a big-org mention
+• Guided build + AI-generated Terraform (time-boxed)
+• Leaves data on S3 + catalog ready, so Spark provisions compute over it next
+• [Distributed-systems thread] managed MPP query (Athena/Redshift) — the Spark shuffle, managed",3,13.5
+Distributed Processing — Spark,"M1 — Build primitive Spark (live, step by step in class — no skeleton):
+• Build a toy distributed processor together, adding a piece per concept
+• Partitioning the data
+• Parallel map across workers (coordinator/worker model)
+• Shuffle: moving data between stages
+• Reduce/aggregate; feel why distribution is hard and why a framework helps
+M2 — Architecture, tradeoffs & scaling:
+• Architecture: driver, executors, cluster manager; jobs, stages, tasks
+• RDDs to DataFrames; lazy evaluation & the DAG
+• Partitions & parallelism; narrow vs wide transformations
+• Scaling: executors/cores, vertical vs horizontal (callback to Module 1)
+• Tradeoffs: Spark's overhead vs single-machine Python/pandas — when it pays off
+M3 — Distributed mechanics & what can go wrong:
+• Shuffle & data movement; spill to disk (callback to Module 1)
+• Skew: one partition/key dominating
+• Stragglers: a single worker taking most of the work; a weak worker raising latency
+• Joins & broadcast (avoiding shuffles); caching/persistence
+• Fault tolerance via lineage & recomputation
+• Reading the Spark UI to diagnose; partitioning strategies to fix
+M4 — Rewriting vanilla Python to Spark on EMR (hands-on):
+• Migrate the project's transforms from vanilla Python to PySpark
+• Blow up the data volume on the same schema: vanilla Python crashes, Spark to the rescue
+• Run on a real EMR cluster reading S3 + Glue Data Catalog (from the cloud module)
+• Measure the speedup; Spark SQL
+• When Spark wins vs when it doesn't; batch vs Structured Streaming (intro, bridges to Kafka)
+• [Distributed-systems thread] PRIMARY hands-on lab",4,18
+Streaming & Event Data — Kafka,"M1 — Why streaming & Kafka fundamentals (the distributed log):
+• Batch vs streaming: when you actually need real-time
+• Kafka's append-only log model; light in-class demo — a tiny append-only log to feel offsets & consumer position
+• Architecture: brokers, topics, partitions, offsets
+• Producers & consumers; consumer groups & rebalancing
+• Replication, leader election & ISR — kill-a-broker demo
+M2 — Practical streaming, hands-on (enhance the project with a streaming source):
+• Delivery semantics in practice: at-least-once / exactly-once; idempotent consumers (callback to pipeline idempotency)
+• Practical design: partitioning for throughput, consumer scaling, offset management & commits
+• Hands-on: add a new streaming source to the anchor project — Kafka producer to Spark Structured Streaming to the lake
+• Batch vs streaming decisions revisited
+• [Distributed-systems thread] replication & delivery semantics anchor",2,9
+Data Quality & Testing,"(1 meeting — concept-first, using the dbt tooling they already know)
+• Why data quality: the cost of bad data; quality dimensions (completeness, accuracy, freshness, uniqueness, validity, consistency)
+• dbt tests: built-in (not_null, unique, accepted_values, relationships) + singular tests
+• dbt-expectations package: richer expectations (ranges, sets, distributions, row counts)
+• Schema drift; freshness, volume & anomaly checks
+• Quality gates between bronze/silver/gold — hands-on on the anchor project
+• Data contracts & SLAs (concept)",1,4.5
+DataOps: Observability & CI/CD,"(1 meeting — observability-heavy; concept + hands-on)
+• The DataOps mindset: pipelines as production software
+• Operational observability: metrics, logs, traces — Prometheus + Grafana; CloudWatch for the cloud pipeline
+• Monitoring pipeline health: run durations, failure rates, freshness as an operational SLA (vs Module 9's data-correctness view)
+• Hands-on: build a Grafana dashboard + an alert on the anchor pipeline
+• Alerting & on-call basics
+• CI/CD for data pipelines: consolidation recap (CI from Module 2 + cloud deploy from the cloud module) into the production release picture",1,4.5
+"NoSQL & Specialized Stores","M1 — NoSQL concepts & key-value stores:
+• Why & when NoSQL; the family landscape and what each type gives you (key-value, document, wide-column, graph, search)
+• Key-value stores: what they give you (low-latency, caching, simple model)
+• Access patterns & data modeling for key-value
+• Hands-on: connect to Redis; core operations (strings, hashes, TTL, caching pattern)
+M2 — Document stores:
+• Document model: what it gives you (flexible/nested schema, developer ergonomics)
+• Access patterns & data modeling: embedding vs referencing, design around queries
+• Hands-on: connect to MongoDB; CRUD, queries, aggregation basics
+• [Distributed-systems thread] consistency models (eventual consistency, quorum) woven through both",2,9
+AI for Data Engineers,"M1 — Agents development (tool-agnostic):
+• LLM APIs & tool use
+• RAG & vector databases as the agent's plumbing
+• Prompt engineering
+• Building a working agent
+• Hands-on: an agent over the project's data (natural-language question to warehouse query)
+M2 — DS pipelines & basic MLOps:
+• The DE's role around ML: feature pipelines, training/serving data flows
+• Model & artifact versioning; batch vs online inference
+• Monitoring data & model drift
+• Hands-on: a feature pipeline off the gold layer + serve a simple model",2,9
+Capstone & Integration,"Final meeting — presentations, defense & interview readiness (everything comes together):
+• Present & defend the end-to-end project
+• System-design review: explain the architecture and justify the tradeoffs
+• Mock interviews: common DE interview questions; telling the pipeline story end-to-end
+• Final readiness check: can they pass a real-life DE interview?",1,4.5
+Total,,34,153

@@ -1,0 +1,15 @@
+Module,Sub-topics,Meetings,Hours
+Git & Version Control,"Managing Source Code and Releases; Popular Source Controls (GitHub, GitLab, Bitbucket); Release Strategies Using Git Branching; Git Commands – Hands-on; Introduction to Linux CLI",1,4.5
+Python Programming for Data Engineering,Advanced Data Structures; OOP – Classes & Objects; Functional Programming; Generators & Comprehensions; Unit Testing and Code Quality; Database Integration with ORM (SQLAlchemy); NumPy Arrays; Pandas + Data Visualization; Lambda Functions,7,31.5
+Docker & Containerization,Docker Architecture – Containers & Commands; Docker in the Data World; Docker Hub & Image Registry; Running MySQL on Docker,1,4.5
+Advanced SQL,Database on Docker + Visual SQL Client; JOIN Types & CTEs; Stored Procedures; Views & Materialized Views; DateTime Objects & Manipulation; Window Functions; ACID Properties,1,4.5
+Big Data Concepts & Architecture,"Big Data Introduction; Big Data Use Cases; Big Data Architecture Patterns; Data Roles (Engineer, Analyst, Scientist); Data Formats (JSON, Avro, Parquet, ORC); Columnar Data Formats; Denormalized Data Modeling; Data Lake Architecture; Apache Hadoop Ecosystem",3,13.5
+NoSQL Databases,"NoSQL History & Motivation; NoSQL Family Types (Key-Value, Document, Wide-Column, Graph); NoSQL Data Modeling Guidelines; Key-Value Store: Redis; Document Store: MongoDB; Search Engine: Elasticsearch",4,18
+Kubernetes for Data Engineers,"Introduction to Kubernetes; Kubernetes Architecture (Pods, Nodes, Clusters); K8s in the Data World (Spark on K8s, Airflow on K8s)",2,9
+Big Data Pipelines & Orchestration,"Data Pipelines & Ingestion Patterns; ETL vs ELT; dbt (Data Build Tool); Medallion Architecture: Bronze, Silver & Gold; Apache Airflow – DAGs & Operators; Data Schema, Metadata & Hive Metastore; Data Catalog; Slowly Changing Dimensions (SCD Types); CDC – Change Data Capture & Debezium; Data Mesh Architecture; Introduction to Data Science",3,13.5
+Apache Spark,Spark Architecture – Cluster Types & Use Cases; Spark Core – RDDs & DataFrames; Spark Batch vs Structured Streaming; Spark SQL; Databricks Platform; Spark MLlib – Introduction,3,13.5
+Real-Time Data Streams & Message Queues,Message Queues – RabbitMQ; Apache Kafka – Architecture & Producers/Consumers; Spark Streaming + Kafka Integration,3,13.5
+Cloud Engineering – AWS,"AWS Management Console; AWS Global Infrastructure; Core Services: IAM, VPC, EC2, S3, RDS; Cloud Storage Strategies; Serverless – AWS Lambda; AWS Glue & Glue Jobs; Amazon Athena & Redshift; Cloud Pricing & Cost Optimization",3,13.5
+Monitoring & Observability,"Prometheus & Grafana; ELK Stack (Elasticsearch, Logstash, Kibana); Cloud Monitoring: Amazon CloudWatch",1,4.5
+AI & Big Data – GenAI for Data Engineers,"Introduction to Generative AI; Embeddings & Vector Databases; RAG – Retrieval-Augmented Generation; Prompt Engineering; LLM APIs (OpenAI, Anthropic, etc.); Amazon Bedrock & Cloud AI Services; הנחיית פרויקט גמר",2,9
+Total,,34,153
